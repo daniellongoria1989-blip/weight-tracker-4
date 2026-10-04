@@ -1,0 +1,2215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ledger — Calorie & Weight Tracker</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f7f7f5;
+    --surface-2: #efeeea;
+    --border: #dcd9d2;
+    --text: #16181c;
+    --text-muted: #6b7280;
+    --accent: #a8650a;
+    --accent-dim: #f4e3c4;
+    --positive: #1f8f5f;
+    --negative: #c73e33;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
+  }
+  body { display: flex; flex-direction: column; min-height: 100vh; }
+  .num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
+  /* ---- Gauge header ---- */
+  .gauge {
+    background: linear-gradient(180deg, #fbfaf8 0%, #ffffff 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 22px 20px 16px;
+    flex-shrink: 0;
+  }
+  .gauge-top {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 4px;
+  }
+  .gauge-title { font-size: 0.78em; letter-spacing: 0.02em; color: var(--text-muted); }
+  .gauge-date { font-size: 0.78em; color: var(--text-muted); }
+  .gauge-main {
+    display: flex; align-items: baseline; gap: 10px; margin: 6px 0 2px;
+  }
+  .gauge-number {
+    font-size: 2.6em; font-weight: 700; line-height: 1;
+  }
+  .gauge-number.positive { color: var(--positive); }
+  .gauge-number.negative { color: var(--negative); }
+  .gauge-unit { font-size: 0.95em; color: var(--text-muted); }
+  .gauge-sub { font-size: 0.82em; color: var(--text-muted); margin-top: 4px; }
+  .gauge-sub b { color: var(--text); font-weight: 600; }
+  .gauge-bar-track {
+    margin-top: 12px; height: 6px; background: var(--surface-2);
+    border-radius: 3px; overflow: hidden; position: relative;
+  }
+  .gauge-bar-fill {
+    height: 100%; background: var(--accent); border-radius: 3px;
+    transition: width 0.3s ease;
+  }
+  .gauge-bar-fill.over { background: var(--negative); }
+
+  /* ---- Tabs ---- */
+  .tabs {
+    display: flex; background: var(--surface); border-bottom: 1px solid var(--border);
+    flex-shrink: 0; overflow-x: auto;
+  }
+  .tab-btn {
+    flex: 1; min-width: 84px; padding: 12px 6px; background: none; border: none;
+    color: var(--text-muted); font-size: 0.8em; font-family: var(--font);
+    cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap;
+  }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .content { flex: 1; overflow-y: auto; padding: 18px 16px 40px; max-width: 640px; margin: 0 auto; width: 100%; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  h2.section-title {
+    font-size: 0.95em; font-weight: 600; margin: 0 0 12px; color: var(--text);
+  }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px; margin-bottom: 14px;
+  }
+  label { display: block; font-size: 0.78em; color: var(--text-muted); margin-bottom: 5px; margin-top: 12px; }
+  label:first-child { margin-top: 0; }
+  input[type="text"], input[type="number"], input[type="date"], select {
+    width: 100%; padding: 9px 10px; background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 7px; color: var(--text); font-size: 0.95em; font-family: var(--font);
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  .row2 { display: flex; gap: 10px; }
+  .row2 > div { flex: 1; }
+  .btn {
+    background: var(--accent); color: #ffffff; border: none; padding: 10px 16px;
+    border-radius: 7px; font-weight: 600; font-size: 0.88em; cursor: pointer; font-family: var(--font);
+  }
+  .btn.secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+  .btn.full { width: 100%; }
+  .btn-row { display: flex; gap: 8px; margin-top: 14px; }
+  .readout-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px;
+  }
+  .readout {
+    background: var(--surface-2); border-radius: 8px; padding: 10px 12px;
+  }
+  .readout .label { font-size: 0.72em; color: var(--text-muted); }
+  .readout .value { font-size: 1.15em; font-weight: 700; margin-top: 2px; }
+
+  .meal-block { margin-bottom: 16px; }
+  .meal-head {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
+  }
+  .meal-head .name { font-weight: 600; font-size: 0.92em; }
+  .meal-head .total { font-size: 0.82em; color: var(--text-muted); }
+  .item-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 10px; background: var(--surface-2); border-radius: 7px; margin-bottom: 6px;
+  }
+  .item-row .item-name { font-size: 0.88em; }
+  .item-row .item-cal { font-size: 0.85em; color: var(--text-muted); margin-left: 8px; }
+  .item-row .rm { background: none; border: none; color: var(--negative); font-size: 1.1em; cursor: pointer; padding: 0 4px; }
+  .item-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .eat-btn {
+    flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--border);
+    background: none; cursor: pointer; padding: 0; color: #fff; font-size: 0.75em; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .eat-btn.on { background: var(--positive); border-color: var(--positive); }
+  .item-row.eaten .item-name { opacity: 0.6; }
+  .item-row-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+  .adj-btn {
+    background: none; border: 1px solid var(--border); color: var(--accent);
+    font-size: 0.8em; font-weight: 600; width: 24px; height: 24px; border-radius: 50%;
+    cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center;
+  }
+  .add-row { display: flex; gap: 6px; margin-top: 6px; }
+  .add-row select { flex: 1.3; }
+  .add-row input[type="text"] { flex: 1.3; }
+  .add-row input[type="number"] { flex: 0.7; }
+  .add-row input.qty-input { flex: 0 0 52px; }
+  .add-row button { flex: 0 0 auto; }
+  .preset-check {
+    display: flex; align-items: center; gap: 6px; font-size: 0.76em; color: var(--text-muted);
+    margin-top: 6px; cursor: pointer;
+  }
+  .preset-check input[type="checkbox"] { width: auto; margin: 0; }
+  .week-strip {
+    display: flex; gap: 6px; margin-top: 12px; overflow-x: auto;
+  }
+  .week-day-btn {
+    flex: 1; min-width: 56px; padding: 8px 4px; background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 7px; text-align: center;
+    cursor: pointer; font-family: var(--font);
+  }
+  .week-day-btn .wd-label { font-size: 0.7em; color: var(--text-muted); }
+  .week-day-btn .wd-date { font-size: 0.78em; font-weight: 600; margin-top: 2px; }
+  .week-day-btn.active { background: var(--accent-dim); border-color: var(--accent); }
+  .week-day-btn.active .wd-label { color: var(--accent); }
+  .week-day-btn.today .wd-date::after { content: " •"; color: var(--accent); }
+  .empty-note { color: var(--text-muted); font-size: 0.82em; font-style: italic; padding: 4px 2px; }
+
+  .preset-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 12px; background: var(--surface-2); border-radius: 7px; margin-bottom: 8px;
+    gap: 8px;
+  }
+  .preset-row > span:first-child { flex: 1; min-width: 0; }
+  .preset-row .rm { background: none; border: none; color: var(--negative); font-size: 1.1em; cursor: pointer; flex-shrink: 0; }
+  .preset-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+  .reorder-btn {
+    background: none; border: 1px solid var(--border); color: var(--text-muted);
+    font-size: 0.85em; width: 26px; height: 26px; border-radius: 5px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; padding: 0;
+  }
+  .reorder-btn:disabled { opacity: 0.25; cursor: default; }
+  .reorder-btn:not(:disabled):hover { background: var(--surface); }
+
+  table.weigh-table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+  table.weigh-table th { text-align: left; color: var(--text-muted); font-weight: 500; font-size: 0.78em; padding: 6px 4px; border-bottom: 1px solid var(--border); }
+  table.weigh-table td { padding: 7px 4px; border-bottom: 1px solid var(--border); }
+  table.weigh-table td.est { color: var(--text-muted); font-style: italic; }
+  .tag { font-size: 0.68em; padding: 1px 6px; border-radius: 10px; margin-left: 6px; }
+  .tag.logged { background: var(--accent-dim); color: var(--accent); }
+  .tag.est { background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border); }
+
+  svg text { font-family: var(--font); }
+
+  .note { font-size: 0.78em; color: var(--text-muted); line-height: 1.5; margin-top: 10px; }
+  #printExportArea { display: none; }
+  @media print {
+    body > *:not(#printExportArea) { display: none !important; }
+    #printExportArea {
+      display: block !important;
+      background: #fff; color: #111; font-family: Georgia, serif; padding: 20px;
+    }
+    #printExportArea h1 { font-size: 1.3em; margin-bottom: 2px; }
+    #printExportArea .print-range { color: #555; font-size: 0.85em; margin-bottom: 16px; }
+    #printExportArea table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+    #printExportArea th, #printExportArea td { border: 1px solid #999; padding: 6px 8px; text-align: left; }
+    #printExportArea th { background: #eee; }
+  }
+</style>
+</head>
+<body>
+
+<div id="storageWarning" style="display:none; background:#c73e33; color:#fff; padding:10px 16px; font-size:0.85em; text-align:center; font-weight:600;"></div>
+<div class="gauge">
+  <div class="gauge-top">
+    <span class="gauge-title" id="gaugeTitle">TODAY'S BALANCE</span>
+    <span class="gauge-date num" id="gaugeDate"></span>
+  </div>
+  <div class="gauge-main">
+    <span class="gauge-number num" id="gaugeNumber">—</span>
+    <span class="gauge-unit">cal remaining</span>
+  </div>
+  <div class="gauge-sub" id="gaugeSub">Set up your profile to get started.</div>
+  <div class="gauge-bar-track"><div class="gauge-bar-fill" id="gaugeBar" style="width:0%"></div></div>
+</div>
+
+<div class="tabs">
+  <button class="tab-btn" data-tab="weigh">Log Weight</button>
+  <button class="tab-btn active" data-tab="log">Today's Log</button>
+  <button class="tab-btn" data-tab="projection">Projection</button>
+  <button class="tab-btn" data-tab="progress">Progress</button>
+  <button class="tab-btn" data-tab="presets">Meal Presets</button>
+  <button class="tab-btn" data-tab="profile">Profile</button>
+</div>
+
+<div class="content">
+
+  <!-- LOG WEIGHT TAB -->
+  <div class="tab-panel" id="tab-weigh">
+    <div class="card">
+      <label>Weighed in on</label>
+      <input type="date" id="sharedWeighDate">
+      <label>Weight (lbs)</label>
+      <input type="number" id="sharedWeighValue" step="0.1">
+      <label>Blood pressure (optional)</label>
+      <div class="row2">
+        <div><input type="number" id="bpSystolic" placeholder="Systolic e.g. 120"></div>
+        <div><input type="number" id="bpDiastolic" placeholder="Diastolic e.g. 80"></div>
+      </div>
+      <label>Dose (mg/week)</label>
+      <input type="number" id="doseMg" step="0.05" min="0" placeholder="e.g. 2.5">
+      <div id="doseStatus" style="font-size:0.78em;color:var(--text-muted);margin-top:4px;"></div>
+      <div class="btn-row">
+        <button class="btn full" id="sharedWeighBtn">Log</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- PROFILE TAB -->
+  <div class="tab-panel" id="tab-profile">
+    <div class="card">
+      <h2 class="section-title">Your details</h2>
+      <label>Sex</label>
+      <select id="p_sex">
+        <option value="male">Male</option>
+        <option value="female">Female</option>
+      </select>
+
+      <label>Birthday</label>
+      <input type="date" id="p_birthdate">
+
+      <label>Height</label>
+      <div class="row2">
+        <div><input type="number" id="p_heightFt" placeholder="ft" min="0" max="8"></div>
+        <div><input type="number" id="p_heightIn" placeholder="in" min="0" max="11"></div>
+      </div>
+
+      <label>Current weight (lbs)</label>
+      <input type="number" id="p_weight" placeholder="e.g. 210" step="0.1">
+
+      <div class="btn-row">
+        <button class="btn full" id="saveProfileBtn">Save profile</button>
+      </div>
+
+      <div class="readout-grid" id="profileReadouts" style="display:none">
+        <div class="readout"><div class="label">Exact age today</div><div class="value num" id="ro_age">—</div></div>
+        <div class="readout"><div class="label">BMR</div><div class="value num" id="ro_bmr">—</div></div>
+        <div class="readout"><div class="label">Maintenance (TDEE)</div><div class="value num" id="ro_tdee">—</div></div>
+        <div class="readout"><div class="label">Daily target</div><div class="value num" id="ro_target">—</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">Backup &amp; restore</h2>
+      <div class="btn-row">
+        <button class="btn full secondary" id="exportDataBtn">Export All Data (.json)</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn full secondary" id="importDataBtn">Import Data (.json)</button>
+        <input type="file" id="importFileInput" accept=".json,application/json" style="display:none">
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title" style="color:var(--negative)">Start over</h2>
+      <div class="btn-row">
+        <button class="btn full" id="resetEverythingBtn" style="background:var(--negative)">Reset Everything</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRESETS TAB -->
+  <div class="tab-panel" id="tab-presets">
+    <div class="card">
+      <h2 class="section-title">Breakfast presets</h2>
+      <div id="presetList-breakfast"></div>
+      <div class="add-row" style="margin-top:10px">
+        <input type="text" id="newPresetName-breakfast" placeholder="Meal name">
+        <input type="number" id="newPresetCal-breakfast" placeholder="Cal">
+        <input type="number" id="newPresetProt-breakfast" placeholder="Protein g (opt)">
+        <button class="btn preset-add-btn" data-category="breakfast">Add</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2 class="section-title">Lunch presets</h2>
+      <div id="presetList-lunch"></div>
+      <div class="add-row" style="margin-top:10px">
+        <input type="text" id="newPresetName-lunch" placeholder="Meal name">
+        <input type="number" id="newPresetCal-lunch" placeholder="Cal">
+        <input type="number" id="newPresetProt-lunch" placeholder="Protein g (opt)">
+        <button class="btn preset-add-btn" data-category="lunch">Add</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2 class="section-title">Dinner presets</h2>
+      <div id="presetList-dinner"></div>
+      <div class="add-row" style="margin-top:10px">
+        <input type="text" id="newPresetName-dinner" placeholder="Meal name">
+        <input type="number" id="newPresetCal-dinner" placeholder="Cal">
+        <input type="number" id="newPresetProt-dinner" placeholder="Protein g (opt)">
+        <button class="btn preset-add-btn" data-category="dinner">Add</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2 class="section-title">Snack presets</h2>
+      <div id="presetList-snack"></div>
+      <div class="add-row" style="margin-top:10px">
+        <input type="text" id="newPresetName-snack" placeholder="Snack name">
+        <input type="number" id="newPresetCal-snack" placeholder="Cal">
+        <input type="number" id="newPresetProt-snack" placeholder="Protein g (opt)">
+        <button class="btn preset-add-btn" data-category="snack">Add</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2 class="section-title">Fruit presets <span style="font-weight:400;color:var(--text-muted);font-size:0.8em">(by cal/gram)</span></h2>
+      <div id="presetList-fruit"></div>
+
+      <label style="margin-top:14px">Anthropic API key (only needed for lookup below)</label>
+      <input type="password" id="haikuApiKey" placeholder="Paste your Anthropic API key">
+
+      <label>Look up a fruit by name</label>
+      <div class="add-row">
+        <input type="text" id="fruitLookupName" placeholder="e.g. medium apple, banana">
+        <button class="btn secondary" id="fruitLookupBtn">Look up</button>
+      </div>
+      <div class="note" id="fruitLookupStatus" style="display:none"></div>
+
+      <div class="add-row" style="margin-top:10px">
+        <input type="text" id="newPresetName-fruit" placeholder="Fruit name">
+        <input type="number" id="newPresetCalPerG-fruit" placeholder="Cal/g" step="0.01">
+      </div>
+      <div class="add-row">
+        <input type="number" id="newPresetProtPerG-fruit" placeholder="Protein g/g (opt)" step="0.01">
+        <button class="btn preset-add-btn" data-category="fruit">Add</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2 class="section-title" style="color:var(--negative)">Reset presets</h2>
+      <div class="btn-row">
+        <button class="btn full" id="resetPresetsBtn" style="background:var(--negative)">Reset Meal Presets</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOG TAB -->
+  <div class="tab-panel active" id="tab-log">
+    <div class="card" id="daySettingsCard">
+      <label style="margin-top:0">Activity level</label>
+      <select id="dayActivity">
+        <option value="1.2">Sedentary — little or no exercise</option>
+        <option value="1.375">Light — exercise 1-3x/week</option>
+        <option value="1.55">Moderate — exercise 4-5x/week</option>
+        <option value="1.725">Active — daily or intense 3-4x/week</option>
+        <option value="1.9">Very Active — intense 6-7x/week</option>
+        <option value="1.95">Extra Active — very intense daily / physical job</option>
+      </select>
+      <label>Weekly weight-loss goal (lbs/week)</label>
+      <select id="dayGoal"><option value="0">0</option><option value="0.5">-0.5</option><option value="1">-1.0</option><option value="1.5">-1.5</option><option value="2">-2.0</option></select>
+      <div id="daySettingsStatus" style="font-size:0.78em;color:var(--text-muted);margin-top:8px;"></div>
+      <div class="btn-row">
+        <button class="btn secondary" id="applyFutureBtn" style="flex:2">Send to all future days</button>
+        <button class="btn secondary" id="useStandardBtn" style="flex:1;display:none">Undo</button>
+      </div>
+    </div>
+    <div class="card">
+      <label>Select Week Start Date</label>
+      <div class="add-row" style="margin-top:0"><input type="date" id="weekStartDate" style="flex:1"><button class="btn secondary" id="saveWeekStartBtn">Save</button></div>
+      <div class="week-strip" id="weekStrip"></div>
+    </div>
+
+    <div class="card" id="finalizeCard">
+      <div id="finalizeStatus"></div>
+      <div class="btn-row">
+        <button class="btn full" id="submitFinalBtn">Submit Final Calories</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="btn-row" style="margin-top:0">
+        <button class="btn secondary" id="savePlanBtn" style="flex:1">Save Daily Meal Plan</button>
+        <button class="btn secondary" id="clearDayBtn" style="flex:1">Clear</button>
+      </div>
+      <div id="planStatus" style="font-size:0.78em;color:var(--text-muted);margin:6px 0 10px;"></div>
+      <div id="mealBlocks"></div>
+    </div>
+
+    <div class="card">
+      <div class="meal-head">
+        <span class="name">Snacks</span>
+        <span class="total num" id="snacksTotal">0 cal</span>
+      </div>
+      <div id="snackItems"></div>
+      <div class="add-row">
+        <select id="snackPresetSelect"><option value="">— pick a preset —</option></select>
+        <input type="number" class="qty-input" id="snackPresetQty" placeholder="Qty" min="1" value="1">
+        <button class="btn secondary" id="addSnackPresetBtn">Add</button>
+      </div>
+      <div class="add-row">
+        <input type="text" id="snackManualName" placeholder="Snack name">
+        <input type="number" id="snackManualCal" placeholder="Cal (each)">
+        <input type="number" class="qty-input" id="snackManualQty" placeholder="Qty" min="1" value="1">
+        <button class="btn secondary" id="addSnackManualBtn">Add</button>
+      </div>
+      <input type="number" id="snackManualProt" placeholder="Protein g each (opt)" style="margin-top:6px">
+      <label class="preset-check"><input type="checkbox" id="snackSaveAsPreset"> Save as preset</label>
+    </div>
+
+    <div class="card">
+      <div class="meal-head">
+        <span class="name">Fruit</span>
+        <span class="total num" id="fruitTotal">0 cal</span>
+      </div>
+      <div id="fruitItems"></div>
+      <div class="add-row">
+        <select id="fruitPresetSelect"><option value="">— pick a fruit —</option></select>
+        <input type="number" class="qty-input" id="fruitPresetGrams" placeholder="Grams">
+        <button class="btn secondary" id="addFruitPresetBtn">Add</button>
+      </div>
+      <div class="add-row">
+        <input type="text" id="fruitManualName" placeholder="Fruit name">
+        <input type="number" id="fruitManualCalPerG" placeholder="Cal/g" step="0.01">
+      </div>
+      <div class="add-row">
+        <input type="number" id="fruitManualProtPerG" placeholder="Protein g/g (opt)" step="0.01">
+        <input type="number" class="qty-input" id="fruitManualGrams" placeholder="Grams">
+        <button class="btn secondary" id="addFruitManualBtn">Add</button>
+      </div>
+      <label class="preset-check"><input type="checkbox" id="fruitSaveAsPreset"> Save as preset</label>
+    </div>
+  </div>
+
+  <!-- PROGRESS TAB -->
+  <div class="tab-panel" id="tab-progress">
+    <div class="card" id="bmiCard">
+      <h2 class="section-title">BMI goal</h2>
+      <div id="bmiWrap"></div>
+    </div>
+    <div class="card">
+      <h2 class="section-title">History</h2>
+      <div id="weighTableWrap"></div>
+    </div>
+    <div class="card">
+      <h2 class="section-title">Export as PDF</h2>
+      <div class="row2">
+        <div>
+          <label>From</label>
+          <input type="date" id="weightPdfFrom">
+        </div>
+        <div>
+          <label>To</label>
+          <input type="date" id="weightPdfTo">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn full secondary" id="weightPdfBtn">Export PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROJECTION TAB -->
+  <div class="tab-panel" id="tab-projection">
+    <div class="card">
+      <label style="margin-top:0">Plan for this week</label>
+      <select id="projModeSelect">
+        <option value="follow">Follow Today's Log</option>
+        <option value="offset">Offset - make up the difference</option>
+      </select>
+      <div id="projGoalRow" style="display:none">
+        <label>Lose by end of week (lbs)</label>
+        <select id="projGoalSelect"><option value="0">0</option><option value="0.5">-0.5</option><option value="1">-1.0</option><option value="1.5">-1.5</option><option value="2">-2.0</option></select>
+      </div>
+      <div id="projModeStatus" style="font-size:0.8em;color:var(--text-muted);margin-top:8px;line-height:1.5"></div>
+      <div class="btn-row">
+        <button class="btn full secondary" id="recalcProjectionBtn">Recalculate</button>
+      </div>
+    </div>
+
+    <div class="card" id="projResultCard" style="display:none">
+      <h2 class="section-title">Week outlook</h2>
+      <div id="projResultWrap"></div>
+    </div>
+  </div>
+
+</div>
+
+<div id="breakthroughOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:110; align-items:center; justify-content:center;">
+  <div style="background:var(--bg); border-radius:14px; padding:24px 20px; width:88%; max-width:360px; text-align:center; border:3px solid var(--positive);">
+    <div style="font-size:2.4em">🎉</div>
+    <div style="font-size:1.3em; font-weight:700; margin-top:6px">Breakthrough!</div>
+    <div id="breakthroughText" style="margin-top:10px; font-size:0.95em; line-height:1.5"></div>
+    <div class="btn-row"><button class="btn full" id="breakthroughOk">Let's go</button></div>
+  </div>
+</div>
+<div id="portionModalOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:100; align-items:center; justify-content:center;">
+  <div style="background:var(--bg); border-radius:12px; padding:20px; width:88%; max-width:360px;">
+    <div style="font-weight:600; margin-bottom:4px;" id="portionModalTitle">Item</div>
+    <div style="font-size:0.8em; color:var(--text-muted); margin-bottom:14px;" id="portionModalPlanned"></div>
+    <div style="display:flex; gap:8px; margin-bottom:10px;">
+      <button class="btn secondary portion-pct-btn" data-pct="100" style="flex:1">100%</button>
+      <button class="btn secondary portion-pct-btn" data-pct="75" style="flex:1">75%</button>
+      <button class="btn secondary portion-pct-btn" data-pct="50" style="flex:1">50%</button>
+      <button class="btn secondary portion-pct-btn" data-pct="25" style="flex:1">25%</button>
+    </div>
+    <label>Other % (precise)</label>
+    <input type="number" id="portionCustomPct" placeholder="e.g. 60" min="1" max="100">
+    <div class="btn-row">
+      <button class="btn secondary full" id="portionCancelBtn">Cancel</button>
+      <button class="btn full" id="portionApplyBtn">Apply</button>
+    </div>
+  </div>
+</div>
+
+<div id="printExportArea"></div>
+
+<script>
+// ================= Storage =================
+const LS_PROFILE = 'wl_profile';
+const LS_PRESETS = 'wl_presets';
+const LS_WEIGHINS = 'wl_weighins';
+const LS_LOGS = 'wl_logs';
+const LS_LASTPROC = 'wl_last_processed_date';
+const LS_PROJ_STATE = 'wl_projection_state';
+const LS_BP = 'wl_bp_log';
+const LS_DOSE = 'wl_dose_log'; // [{date, mg}] - one entry per dose CHANGE; a dose stays in effect until the next one
+const LS_SELECTED_DATE = 'wl_selected_log_date';
+const LS_WEEK_START = 'wl_week_start_date';
+const LS_DAILY_PLAN = 'wl_daily_plan'; // {fromDate, meals:{breakfast,lunch,dinner,snacks,fruit}}
+const LS_BMI_CLASS = 'wl_bmi_class_idx'; // last class you were in, to catch a breakthrough
+const LS_DAY_SETTINGS = 'wl_day_settings'; // {standards:[{from,activity,goal}], days:{date:{activity,goal}}}
+const LS_PROJ_MODE = 'wl_proj_mode';       // {mode:'follow'|'offset', goal}
+const LS_DATES_V2 = 'wl_dates_actual_day'; // set once weigh-ins/BP are stored on the real weigh-in day
+
+// Local storage is the fast/synchronous copy. IndexedDB is the durable backup
+// used by Safari Home Screen web apps. Both are kept in sync so a web-app
+// launch can recover the tracker even if Safari's localStorage copy is missing.
+const IDB_NAME = 'ledger_weight_tracker';
+const IDB_STORE = 'state';
+const IDB_VERSION = 1;
+
+function openStateDB() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) { reject(new Error('IndexedDB unavailable')); return; }
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains(IDB_STORE)) {
+        req.result.createObjectStore(IDB_STORE);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error || new Error('IndexedDB open failed'));
+  });
+}
+
+async function idbGet(key) {
+  const db = await openStateDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readonly');
+    const req = tx.objectStore(IDB_STORE).get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+    tx.oncomplete = () => db.close();
+  });
+}
+
+async function idbSet(key, val) {
+  const db = await openStateDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(val, key);
+    tx.oncomplete = () => { db.close(); resolve(true); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+
+async function idbDelete(key) {
+  const db = await openStateDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).delete(key);
+    tx.oncomplete = () => { db.close(); resolve(true); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+
+function loadJSON(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch (e) { return fallback; }
+}
+
+function saveJSON(key, val) {
+  try {
+    localStorage.setItem(key, JSON.stringify(val));
+    hideStorageWarning();
+  } catch (e) {
+    showStorageWarning(e);
+  }
+  // Fire-and-forget durable backup. Do not make the UI wait for IndexedDB.
+  idbSet(key, val).catch(() => {});
+  return true;
+}
+
+function saveStateValue(key, val) {
+  try { localStorage.setItem(key, String(val)); } catch (e) { showStorageWarning(e); }
+  idbSet(key, String(val)).catch(() => {});
+}
+
+async function restoreDurableState() {
+  // Only restore missing localStorage values. Never overwrite an existing
+  // localStorage copy, because it may contain newer edits from this launch.
+  const keys = [LS_PROFILE, LS_PRESETS, LS_WEIGHINS, LS_LOGS, LS_LASTPROC, LS_PROJ_STATE, LS_BP, LS_SELECTED_DATE, LS_WEEK_START, LS_DATES_V2, LS_DAILY_PLAN, LS_BMI_CLASS, LS_DAY_SETTINGS, LS_PROJ_MODE, LS_DOSE];
+  let restored = false;
+  for (const key of keys) {
+    try {
+      if (localStorage.getItem(key) === null) {
+        const value = await idbGet(key);
+        if (value !== undefined && value !== null) {
+          localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+          restored = true;
+        }
+      }
+    } catch (e) {}
+  }
+  if (restored) {
+    profile = loadJSON(LS_PROFILE, null);
+    presets = loadJSON(LS_PRESETS, []);
+    weighins = loadJSON(LS_WEIGHINS, []);
+    logs = loadJSON(LS_LOGS, {});
+    bpLog = loadJSON(LS_BP, []);
+    doseLog = loadJSON(LS_DOSE, []);
+    dailyPlan = loadJSON(LS_DAILY_PLAN, null);
+    daySettings = normDaySettings(loadJSON(LS_DAY_SETTINGS, null));
+    projMode = normProjMode(loadJSON(LS_PROJ_MODE, null));
+  }
+  return restored;
+}
+function showStorageWarning(err) {
+  const el = document.getElementById('storageWarning');
+  const isQuotaLike = err && (err.name === 'QuotaExceededError' || /quota/i.test(err.message || ''));
+  el.textContent = isQuotaLike
+    ? '⚠ Nothing is being saved right now - your browser is blocking storage (this is exactly what Private Browsing does on iOS Safari). Turn Private Browsing off and reload this page.'
+    : '⚠ Nothing is being saved right now - your browser is blocking storage for this page.';
+  el.style.display = 'block';
+}
+function hideStorageWarning() {
+  document.getElementById('storageWarning').style.display = 'none';
+}
+
+// Test storage immediately on load, before the user does anything, so a
+// blocked browser (Private Browsing, storage disabled, etc.) shows the
+// warning right away instead of only after something silently fails to save.
+(function testStorageOnLoad() {
+  try {
+    localStorage.setItem('wl_storage_test', '1');
+    localStorage.removeItem('wl_storage_test');
+  } catch (e) {
+    showStorageWarning(e);
+  }
+})();
+
+let profile = loadJSON(LS_PROFILE, null);
+let presets = loadJSON(LS_PRESETS, []);
+let weighins = loadJSON(LS_WEIGHINS, []); // [{date, weight, source:'logged'|'estimated'}]
+let bpLog = loadJSON(LS_BP, []); // [{date, systolic, diastolic, note}]
+let doseLog = loadJSON(LS_DOSE, []);
+function doseAsOf(dateStr) {
+  let best = null;
+  doseLog.forEach(d => { if (d.date <= dateStr && (!best || d.date > best.date)) best = d; });
+  return best ? best.mg : null;
+}
+function latestDose() {
+  let best = null;
+  doseLog.forEach(d => { if (!best || d.date > best.date) best = d; });
+  return best;
+}
+function fmtDose(mg) { return mg === null || mg === undefined ? '' : String(Math.round(mg * 1000) / 1000); }
+// Keeps the dose box filled with your current dose until you change it.
+function renderDoseField() {
+  const el = document.getElementById('doseMg');
+  if (!el) return;
+  const cur = latestDose();
+  el.value = cur ? fmtDose(cur.mg) : '';
+  document.getElementById('doseStatus').textContent = cur
+    ? 'Current dose: ' + fmtDose(cur.mg) + ' mg/week since ' + cur.date + '. Change the number to log a new dose.'
+    : 'No dose saved yet.';
+}
+let dailyPlan = loadJSON(LS_DAILY_PLAN, null);
+function normDaySettings(v) { return { standards: (v && v.standards) || [], days: (v && v.days) || {} }; }
+function normProjMode(v) { return { mode: (v && v.mode === 'offset') ? 'offset' : 'follow', goal: (v && v.goal != null) ? Number(v.goal) : 2 }; }
+let daySettings = normDaySettings(loadJSON(LS_DAY_SETTINGS, null));
+let projMode = normProjMode(loadJSON(LS_PROJ_MODE, null));
+let logs = loadJSON(LS_LOGS, {}); // { 'YYYY-MM-DD': {breakfast:[],lunch:[],dinner:[],snacks:[]} }
+
+// ================= Date/Math helpers =================
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function addDays(dateStr, n) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function exactAge(birthdateStr) {
+  const birth = new Date(birthdateStr + 'T00:00:00');
+  const now = new Date();
+  const ms = now - birth;
+  return ms / (1000 * 60 * 60 * 24 * 365.25);
+}
+function heightToCm(ft, inch) {
+  const totalIn = (Number(ft)||0) * 12 + (Number(inch)||0);
+  return totalIn * 2.54;
+}
+function lbsToKg(lbs) { return Number(lbs) * 0.45359237; }
+
+function calcBMR(sex, weightLbs, heightCm, ageDecimal) {
+  const kg = lbsToKg(weightLbs);
+  const base = 10 * kg + 6.25 * heightCm - 5 * ageDecimal;
+  return sex === 'male' ? base + 5 : base - 161;
+}
+function calcTDEE(bmr, activityMult) { return bmr * activityMult; }
+function calcTarget(tdee, weeklyGoalLbs) { return tdee - (Number(weeklyGoalLbs)||0) * 500; }
+
+const MEAL_KEYS = ['breakfast','lunch','dinner','snacks','fruit'];
+// Copy of a day's items with per-day stuff (eaten checks, % portions) stripped off
+function planMealsFrom(day) {
+  const out = {};
+  MEAL_KEYS.forEach(k => {
+    out[k] = (day[k] || []).map(it => {
+      const c = { ...it };
+      if (c.plannedCalories != null) c.calories = c.plannedCalories;
+      if (c.plannedProtein != null) c.protein = c.plannedProtein;
+      delete c.plannedCalories; delete c.plannedProtein; delete c.portionPct; delete c.eaten;
+      return c;
+    });
+  });
+  return out;
+}
+function ensureDayLog(dateStr) {
+  if (!logs[dateStr]) {
+    if (dailyPlan && dateStr > dailyPlan.fromDate) {
+      // forward days only: start them off with the saved daily plan
+      const m = JSON.parse(JSON.stringify(dailyPlan.meals));
+      logs[dateStr] = { ...m, finalized: false, fromPlan: true };
+      saveJSON(LS_LOGS, logs);
+    } else {
+      logs[dateStr] = { breakfast: [], lunch: [], dinner: [], snacks: [], fruit: [], finalized: false };
+    }
+  }
+  if (!logs[dateStr].fruit) logs[dateStr].fruit = []; // backfill for days logged before fruit existed
+  return logs[dateStr];
+}
+function dayTotal(dateStr) {
+  const day = logs[dateStr];
+  if (!day) return 0;
+  let sum = 0;
+  ['breakfast','lunch','dinner','snacks','fruit'].forEach(k => {
+    (day[k]||[]).forEach(item => sum += Number(item.calories)||0);
+  });
+  return sum;
+}
+function dayProteinTotal(dateStr) {
+  const day = logs[dateStr];
+  if (!day) return 0;
+  let sum = 0;
+  ['breakfast','lunch','dinner','snacks','fruit'].forEach(k => {
+    (day[k]||[]).forEach(item => sum += Number(item.protein)||0);
+  });
+  return sum;
+}
+
+// Weigh-ins are STORED on the real day you stepped on the scale. For calorie/projection
+// math only, a fasted morning weight is the result of the PREVIOUS day, so the math
+// reads them shifted back one day.
+function projWeighins() {
+  return weighins.map(w => ({ ...w, date: addDays(w.date, -1) }));
+}
+// Old versions stored dates already shifted back a day - move them to the real day once.
+function shiftToActualDays(list) {
+  return (list || []).map(r => ({ ...r, date: addDays(r.date, 1) }));
+}
+
+// most recent known weight as of a given date (logged or estimated), and the target used that day
+function weightAsOf(dateStr) {
+  // find the latest weigh-in entry with date <= dateStr
+  let best = null;
+  projWeighins().forEach(w => {
+    if (w.date <= dateStr && (!best || w.date > best.date)) best = w;
+  });
+  if (best) return best.weight;
+  return profile ? Number(profile.weight) : null;
+}
+
+// ---- Per-day activity level + weekly goal ----
+// A day uses its own pick if you set one for that day only; otherwise the latest
+// "send to all future days" standard on or before it; otherwise the original profile values.
+function standardFor(dateStr) {
+  let best = null;
+  daySettings.standards.forEach(st => { if (st.from <= dateStr && (!best || st.from > best.from)) best = st; });
+  if (best) return { activity: Number(best.activity), goal: Number(best.goal), from: best.from };
+  return { activity: Number(profile && profile.activity) || 1.2, goal: Number(profile && profile.goal) || 0, from: null };
+}
+function isDayCustom(dateStr) { return !!daySettings.days[dateStr]; }
+function settingFor(dateStr) {
+  const d = daySettings.days[dateStr];
+  return d ? { activity: Number(d.activity), goal: Number(d.goal) } : standardFor(dateStr);
+}
+
+// ---- The one chain everything uses (gauge, Today's Log target, Projection) ----
+function projWindowStart(dateStr) {
+  const el = document.getElementById('weekStartDate');
+  return (el && el.value) || mondayOfWeek(dateStr);
+}
+function chainAnchor(windowStart) {
+  let best = null;
+  projWeighins().forEach(w => {
+    if (w.date < windowStart && w.source === 'logged' && (!best || w.date > best.date)) best = w;
+  });
+  return { weight: best ? best.weight : Number(profile.weight), cursor: best ? addDays(best.date, 1) : windowStart };
+}
+// Walk day by day. openCut = calories under maintenance for each "open" day of the
+// window in Offset mode (null = Follow mode, every day uses its own goal).
+// Open = inside the 7-day window, not finalized, and not set by hand for that day.
+function walkDays(fromDate, toDateExclusive, startWeight, windowStart, openCut) {
+  const rows = [];
+  const pw = projWeighins();
+  const heightCm = heightToCm(profile.heightFt, profile.heightIn);
+  const windowEnd = addDays(windowStart, 7);
+  let currentWeight = startWeight;
+  let cursor = fromDate;
+  while (cursor < toDateExclusive) {
+    const realHere = pw.find(w => w.date === cursor && w.source === 'logged');
+    const st = settingFor(cursor);
+    const age = exactAgeOnDate(profile.birthdate, cursor);
+    const bmr = calcBMR(profile.sex, currentWeight, heightCm, age);
+    const tdee = calcTDEE(bmr, st.activity);
+    const finalized = isFinalized(cursor);
+    const custom = isDayCustom(cursor);
+    const inWindow = cursor >= windowStart && cursor < windowEnd;
+    const open = inWindow && !finalized && !custom;
+    const target = (openCut != null && open) ? (tdee - openCut) : calcTarget(tdee, st.goal);
+    // Finalized days use the real logged total; everything else is assumed to hit target.
+    const logged = finalized ? dayTotal(cursor) : target;
+    const projectedWeight = currentWeight + (logged - tdee) / 3500;
+    const endWeight = realHere ? realHere.weight : projectedWeight;
+    rows.push({ date: cursor, tdee, target, logged, finalized, custom, open, inWindow, actual: !!realHere, endWeight, projectedWeight });
+    currentWeight = endWeight;
+    cursor = addDays(cursor, 1);
+  }
+  return rows;
+}
+// Offset mode: the week has to total goal x 3500 cal under maintenance. Finalized days
+// count what really happened, hand-set days count what you set, and the open days
+// split whatever is left evenly. No floor - the number is shown as-is.
+function solveOpenCut(windowStart) {
+  if (!profile || projMode.mode !== 'offset') return null;
+  const anchor = chainAnchor(windowStart);
+  const end = addDays(windowStart, 7);
+  const need = Number(projMode.goal) * 3500;
+  let cutCal = Number(projMode.goal) * 500;
+  for (let i = 0; i < 4; i++) {
+    const rows = walkDays(anchor.cursor, end, anchor.weight, windowStart, cutCal).filter(r => r.inWindow);
+    const openRows = rows.filter(r => r.open);
+    if (!openRows.length) return null;
+    const fixed = rows.filter(r => !r.open).reduce((sum, r) => sum + (r.tdee - r.logged), 0);
+    cutCal = (need - fixed) / openRows.length;
+  }
+  return cutCal;
+}
+function weightGoingInto(dateStr) {
+  if (!profile) return null;
+  const windowStart = projWindowStart(dateStr);
+  const anchor = chainAnchor(windowStart);
+  const rows = walkDays(anchor.cursor, dateStr, anchor.weight, windowStart, solveOpenCut(windowStart));
+  return rows.length ? rows[rows.length - 1].endWeight : anchor.weight;
+}
+function dayPlan(dateStr) {
+  if (!profile) return null;
+  const windowStart = projWindowStart(dateStr);
+  const w = weightGoingInto(dateStr) ?? Number(profile.weight);
+  return walkDays(dateStr, addDays(dateStr, 1), w, windowStart, solveOpenCut(windowStart))[0];
+}
+function targetForDate(dateStr) { const p = dayPlan(dateStr); return p ? p.target : null; }
+// Maintenance calories (TDEE) for a date - the baseline for actual weight-change math.
+function tdeeForDate(dateStr) { const p = dayPlan(dateStr); return p ? p.tdee : null; }
+function exactAgeOnDate(birthdateStr, onDateStr) {
+  const birth = new Date(birthdateStr + 'T00:00:00');
+  const on = new Date(onDateStr + 'T00:00:00');
+  return (on - birth) / (1000*60*60*24*365.25);
+}
+
+// ================= Week-ahead projection (manual, on-demand) =================
+const WEEKDAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+function weekdayName(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return WEEKDAY_NAMES[d.getDay()];
+}
+function isFinalized(dateStr) {
+  return !!(logs[dateStr] && logs[dateStr].finalized);
+}
+function calcWeekProjection(startDateStr) {
+  return walkDays(startDateStr, addDays(startDateStr, 7), weightGoingInto(startDateStr), startDateStr, solveOpenCut(startDateStr))
+    .map(r => ({
+      date: r.date, weekday: weekdayName(r.date),
+      target: Math.round(r.target), logged: Math.round(r.logged), tdee: r.tdee,
+      finalized: r.finalized, custom: r.custom, open: r.open,
+      actual: r.actual, endWeight: r.endWeight, projectedWeight: r.projectedWeight
+    }));
+}
+function renderProjectionTable(rows, startDateStr) {
+  const wrap = document.getElementById('projResultWrap');
+  const startWeight = weightGoingInto(startDateStr);
+  let html = '<table class="weigh-table"><tr><th>Day</th><th>Date</th><th>Logged</th><th>Target</th><th>Est. Weight</th></tr>';
+  if (startWeight != null) {
+    html += `<tr><td colspan="4">Starting weight</td><td class="num"><b>${startWeight.toFixed(1)} lbs</b></td></tr>`;
+  }
+  rows.forEach(r => {
+    let loggedCell;
+    if (r.finalized) loggedCell = r.logged + ' cal';
+    else loggedCell = '<i>' + r.logged + ' cal (assumed)</i>';
+    let weightCell = r.endWeight.toFixed(1) + ' lbs';
+    if (r.actual) {
+      // real weigh-in: red if heavier than projected, green if lighter
+      const diff = Math.round((r.endWeight - r.projectedWeight) * 10) / 10;
+      const c = diff > 0 ? 'var(--negative)' : (diff < 0 ? 'var(--positive)' : 'var(--text)');
+      weightCell = '<b style="color:' + c + '">' + weightCell + '</b>';
+    }
+    html += `<tr><td>${r.weekday}</td><td>${r.date}</td><td class="num">${loggedCell}</td><td class="num"${r.target < 1200 ? ' style="color:var(--negative);font-weight:700"' : ''}>${r.target} cal</td><td class="num ${(r.finalized || r.actual) ? '' : 'est'}">${weightCell}</td></tr>`;
+  });
+  html += '</table>';
+  if (startWeight != null && rows.length) {
+    const endWeight = rows[rows.length - 1].endWeight;
+    const change = endWeight - startWeight;
+    const sign = change > 0 ? '+' : '';
+    const color = change < 0 ? 'var(--positive)' : (change > 0 ? 'var(--negative)' : 'var(--text-muted)');
+    html += `<div style="margin-top:14px;padding:14px;border:2px solid var(--accent);border-radius:10px;background:var(--accent-dim);text-align:center;">
+      <div style="font-size:0.78em;color:var(--text-muted);letter-spacing:0.03em;">PROJECTED FOR THIS WEEK</div>
+      <div class="num" style="font-size:1.05em;margin-top:6px;">${startWeight.toFixed(1)} lbs &rarr; <b>${endWeight.toFixed(1)} lbs</b></div>
+      <div class="num" style="font-size:1.8em;font-weight:700;color:${color};margin-top:4px;">${sign}${change.toFixed(1)} lbs</div>
+    </div>`;
+  }
+  wrap.innerHTML = html;
+  document.getElementById('projResultCard').style.display = 'block';
+}
+
+function runProjection() {
+  if (!profile) return;
+  const startDate = document.getElementById('weekStartDate').value; // the Monday anchor, not whichever day is selected
+  const rows = calcWeekProjection(startDate);
+  renderProjectionTable(rows, startDate);
+  renderProjModeControls(rows);
+}
+
+// ================= Daily catch-up projection =================
+// Walks forward from the last processed date to yesterday, projecting weight
+// change from logged calories vs. that day's TDEE (maintenance), so today's target reflects it.
+function runCatchUp() {
+  // Weight history is real weigh-ins ONLY. This used to auto-write "estimated"
+  // entries from calorie math; now it just clears out any that were saved before.
+  const before = weighins.length;
+  weighins = weighins.filter(w => w.source !== 'estimated');
+  if (weighins.length !== before) saveJSON(LS_WEIGHINS, weighins);
+}
+
+// ================= UI: Tabs =================
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'progress') renderProgress();
+    if (btn.dataset.tab === 'projection') runProjection();
+  });
+});
+
+// ================= UI: Profile =================
+function fillProfileForm() {
+  if (!profile) return;
+  document.getElementById('p_sex').value = profile.sex;
+  document.getElementById('p_birthdate').value = profile.birthdate;
+  document.getElementById('p_heightFt').value = profile.heightFt;
+  document.getElementById('p_heightIn').value = profile.heightIn;
+  document.getElementById('p_weight').value = profile.weight;
+}
+
+function renderProfileReadouts() {
+  if (!profile || !profile.birthdate || !profile.heightFt === undefined) return;
+  const heightCm = heightToCm(profile.heightFt, profile.heightIn);
+  const age = exactAge(profile.birthdate);
+  const w = weightAsOf(todayStr()) ?? Number(profile.weight);
+  const bmr = calcBMR(profile.sex, w, heightCm, age);
+  const st = settingFor(todayStr());
+  const tdee = calcTDEE(bmr, st.activity);
+  const target = targetForDate(todayStr());
+
+  document.getElementById('profileReadouts').style.display = 'grid';
+  document.getElementById('ro_age').textContent = age.toFixed(3) + ' yrs';
+  document.getElementById('ro_bmr').textContent = Math.round(bmr) + ' cal';
+  document.getElementById('ro_tdee').textContent = Math.round(tdee) + ' cal';
+  document.getElementById('ro_target').textContent = Math.round(target) + ' cal';
+}
+
+function trySaveProfile(showAlertIfInvalid) {
+  const candidate = {
+    sex: document.getElementById('p_sex').value,
+    birthdate: document.getElementById('p_birthdate').value,
+    heightFt: Number(document.getElementById('p_heightFt').value) || 0,
+    heightIn: Number(document.getElementById('p_heightIn').value) || 0,
+    weight: Number(document.getElementById('p_weight').value) || 0,
+    // activity + goal now live in Today's Log; these are only the starting values
+    activity: (profile && profile.activity) || '1.2',
+    goal: (profile && profile.goal) || 0
+  };
+  if (!candidate.birthdate || !candidate.weight || (!candidate.heightFt && !candidate.heightIn)) {
+    if (showAlertIfInvalid) alert('Please fill in birthday, height, and weight.');
+    return false;
+  }
+  profile = candidate;
+  saveJSON(LS_PROFILE, profile);
+  // Seed an initial weigh-in if none exist yet. Same fasted-morning-weight rule as
+  // the shared widget: this is a right-now reading, so it represents the completed
+  // day BEFORE today, not today itself - today isn't over yet.
+  if (weighins.length === 0) {
+    const seedDate = todayStr();
+    weighins.push({ date: seedDate, weight: profile.weight, source: 'logged' });
+    saveJSON(LS_WEIGHINS, weighins);
+  }
+  return true;
+}
+
+document.getElementById('saveProfileBtn').addEventListener('click', () => {
+  if (trySaveProfile(true)) {
+    renderProfileReadouts();
+    refreshAll();
+  }
+});
+
+// Auto-save on every field change too, so a filled-in profile never gets lost
+// just because the Save button wasn't explicitly clicked.
+['p_sex','p_birthdate','p_heightFt','p_heightIn','p_weight'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => {
+    if (trySaveProfile(false)) {
+      renderProfileReadouts();
+      refreshGauge();
+    }
+  });
+});
+
+document.getElementById('exportDataBtn').addEventListener('click', () => {
+  const bundle = {
+    exportedAt: new Date().toISOString(),
+    profile: profile,
+    presets: presets,
+    weighins: weighins,
+    logs: logs,
+    bpLog: bpLog,
+    doseLog: doseLog,
+    dailyPlan: dailyPlan,
+    daySettings: daySettings,
+    projMode: projMode,
+    datesActualDay: true
+  };
+  const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'weight-tracker-backup-' + todayStr() + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById('importDataBtn').addEventListener('click', () => {
+  document.getElementById('importFileInput').click();
+});
+
+document.getElementById('importFileInput').addEventListener('change', () => {
+  const file = document.getElementById('importFileInput').files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    let bundle;
+    try {
+      bundle = JSON.parse(e.target.result);
+    } catch (err) {
+      alert('That file is not valid JSON - could not read it.');
+      return;
+    }
+    if (!bundle || typeof bundle !== 'object' || !('profile' in bundle && 'weighins' in bundle && 'logs' in bundle)) {
+      alert('That file does not look like a Weight Tracker backup.');
+      return;
+    }
+    const sure = confirm('Import this backup? It will REPLACE everything currently in this app - profile, presets, food log, and weigh-ins - with no undo.');
+    if (!sure) return;
+
+    profile = bundle.profile || null;
+    presets = bundle.presets || [];
+    weighins = bundle.weighins || [];
+    logs = bundle.logs || {};
+    bpLog = bundle.bpLog || [];
+    doseLog = bundle.doseLog || [];
+    saveJSON(LS_DOSE, doseLog);
+    dailyPlan = bundle.dailyPlan || null;
+    if (dailyPlan) saveJSON(LS_DAILY_PLAN, dailyPlan);
+    daySettings = normDaySettings(bundle.daySettings);
+    projMode = normProjMode(bundle.projMode);
+    saveJSON(LS_DAY_SETTINGS, daySettings);
+    saveJSON(LS_PROJ_MODE, projMode);
+    if (!bundle.datesActualDay) {
+      // backup from an older version - its dates were saved one day back
+      weighins = shiftToActualDays(weighins);
+      bpLog = shiftToActualDays(bpLog);
+    }
+    saveStateValue(LS_DATES_V2, '1');
+
+    saveJSON(LS_PROFILE, profile);
+    saveJSON(LS_PRESETS, presets);
+    saveJSON(LS_WEIGHINS, weighins);
+    saveJSON(LS_LOGS, logs);
+    saveJSON(LS_BP, bpLog);
+
+    if (profile) fillProfileForm();
+    selectedLogDate = todayStr();
+    saveStateValue(LS_SELECTED_DATE, selectedLogDate);
+    document.getElementById('weekStartDate').value = mondayOfWeek(todayStr());
+    persistWeekStart();
+    refreshAll();
+    runProjection();
+    alert('Backup imported successfully.');
+  };
+  reader.readAsText(file);
+  document.getElementById('importFileInput').value = '';
+});
+
+document.getElementById('resetEverythingBtn').addEventListener('click', () => {
+  const sure = confirm('This wipes your profile, food log, weigh-ins, blood pressure log, and projections - with no undo. Meal presets are kept. Reset and start over?');
+  if (!sure) return;
+
+  [LS_PROFILE, LS_WEIGHINS, LS_LOGS, LS_LASTPROC, LS_PROJ_STATE, LS_BP, LS_DOSE, LS_DAY_SETTINGS, LS_PROJ_MODE].forEach(key => { try { localStorage.removeItem(key); } catch(e) {} idbDelete(key).catch(() => {}); });
+
+  profile = null;
+  daySettings = normDaySettings(null);
+  projMode = normProjMode(null);
+  weighins = [];
+  logs = {};
+  bpLog = [];
+  doseLog = [];
+  selectedLogDate = todayStr();
+  saveStateValue(LS_SELECTED_DATE, selectedLogDate);
+
+  // clear the visible profile form
+  document.getElementById('p_sex').value = 'male';
+  document.getElementById('p_birthdate').value = '';
+  document.getElementById('p_heightFt').value = '';
+  document.getElementById('p_heightIn').value = '';
+  document.getElementById('p_weight').value = '';
+  document.getElementById('profileReadouts').style.display = 'none';
+
+  document.getElementById('projResultCard').style.display = 'none';
+  document.getElementById('weekStartDate').value = mondayOfWeek(todayStr());
+  persistWeekStart();
+
+  refreshAll();
+  alert('Everything has been reset except your meal presets. Set up your profile to start fresh.');
+});
+
+document.getElementById('resetPresetsBtn').addEventListener('click', () => {
+  const sure = confirm('This deletes every preset in all four sections (Breakfast, Lunch, Dinner, Snack) - with no undo. Continue?');
+  if (!sure) return;
+  presets = [];
+  try { localStorage.removeItem(LS_PRESETS); } catch(e) {}
+  idbDelete(LS_PRESETS).catch(() => {});
+  renderPresets();
+  renderLogTab();
+  alert('All meal presets have been cleared.');
+});
+
+// ================= UI: Presets =================
+const PRESET_CATEGORIES = ['breakfast','lunch','dinner','snack','fruit'];
+
+// ================= Fruit lookup (Haiku) =================
+const HAIKU_MODEL = "claude-haiku-4-5-20251001";
+const HAIKU_API_URL = "https://api.anthropic.com/v1/messages";
+const LS_HAIKU_KEY = 'wl_haiku_api_key';
+
+function getHaikuKey() { return localStorage.getItem(LS_HAIKU_KEY) || ''; }
+function setHaikuKey(k) { localStorage.setItem(LS_HAIKU_KEY, k); }
+
+(function initHaikuKeyField() {
+  const el = document.getElementById('haikuApiKey');
+  const saved = getHaikuKey();
+  if (saved) el.value = saved;
+  el.addEventListener('change', () => setHaikuKey(el.value.trim()));
+})();
+
+function setFruitLookupStatus(text, isError) {
+  const el = document.getElementById('fruitLookupStatus');
+  el.style.display = 'block';
+  el.style.color = isError ? 'var(--negative)' : 'var(--text-muted)';
+  el.textContent = text;
+}
+
+document.getElementById('fruitLookupBtn').addEventListener('click', async () => {
+  const apiKey = getHaikuKey();
+  const query = document.getElementById('fruitLookupName').value.trim();
+  if (!apiKey) { setFruitLookupStatus('Paste your Anthropic API key above first.', true); return; }
+  if (!query) { setFruitLookupStatus('Type a fruit name first.', true); return; }
+
+  const btn = document.getElementById('fruitLookupBtn');
+  btn.disabled = true;
+  setFruitLookupStatus('Looking up ' + query + '...', false);
+
+  const systemPrompt = `You are a nutrition data lookup tool. Given the name of a fruit (optionally with a size, e.g. "medium apple"), respond with ONLY a JSON object, no other text, no markdown fences, in exactly this shape:
+{"name": "<fruit name, e.g. 'Medium Apple'>", "grams": <number, typical weight in grams this data is for>, "calories": <number, calories for that weight>, "protein": <number, grams of protein for that weight, 0 if negligible>}
+Use standard, well-established reference data (USDA-style) for a common/typical serving of that fruit. If the input is not a recognizable fruit, respond with only {"error": "<short reason>"} instead.`;
+
+  try {
+    const resp = await fetch(HAIKU_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: HAIKU_MODEL,
+        max_tokens: 300,
+        system: systemPrompt,
+        messages: [{ role: "user", content: query }]
+      })
+    });
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error("API error " + resp.status + ": " + errText.slice(0, 200));
+    }
+    const data = await resp.json();
+    const textBlock = (data.content || []).find(b => b.type === 'text');
+    if (!textBlock) throw new Error("No response text came back.");
+    let parsed;
+    try {
+      parsed = JSON.parse(textBlock.text.trim());
+    } catch (e) {
+      throw new Error("Could not read the response - try rephrasing the fruit name.");
+    }
+    if (parsed.error) throw new Error(parsed.error);
+    if (!parsed.grams || !parsed.calories) throw new Error("Response was missing grams or calories.");
+
+    const calPerGram = Math.round((parsed.calories / parsed.grams) * 1000) / 1000;
+    const proteinPerGram = parsed.protein ? Math.round((parsed.protein / parsed.grams) * 1000) / 1000 : '';
+
+    document.getElementById('newPresetName-fruit').value = parsed.name || query;
+    document.getElementById('newPresetCalPerG-fruit').value = calPerGram;
+    document.getElementById('newPresetProtPerG-fruit').value = proteinPerGram;
+
+    setFruitLookupStatus(
+      `${parsed.name}: ${parsed.calories} cal / ${parsed.grams}g` + (parsed.protein ? `, ${parsed.protein}g protein` : '') +
+      ` → filled in below as ${calPerGram} cal/g. Review it, then tap Add.`, false
+    );
+  } catch (err) {
+    setFruitLookupStatus('Lookup failed: ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+function migratePresets() {
+  // any preset saved before categories existed gets bucketed under snack,
+  // rather than silently vanishing from every dropdown
+  let changed = false;
+  presets.forEach(p => {
+    if (!PRESET_CATEGORIES.includes(p.category)) { p.category = 'snack'; changed = true; }
+  });
+  if (changed) saveJSON(LS_PRESETS, presets);
+}
+
+function proteinSuffix(p) {
+  return (p && p > 0) ? `, ${p}g protein` : '';
+}
+
+// ================= Shared item-row rendering + portion adjustment =================
+// One version of this used across Breakfast/Lunch/Dinner/Snacks/Fruit so the
+// "how much did I actually finish" behavior is identical everywhere, weekday
+// staple or weekend meal alike.
+function renderItemRow(logKey, idx, item) {
+  const gramsNote = item.grams ? ` (${item.grams}g)` : '';
+  const plannedLine = (item.portionPct != null && item.portionPct !== 100)
+    ? `<div style="font-size:0.72em;color:var(--accent);margin-top:2px;">${item.portionPct}% of ${item.plannedCalories} cal planned</div>`
+    : '';
+  return `<div class="item-row${item.eaten ? ' eaten' : ''}">
+    <span class="item-left"><button class="eat-btn${item.eaten ? ' on' : ''}" data-log="${logKey}" data-idx="${idx}" title="Mark as eaten">${item.eaten ? '✓' : ''}</button>
+    <span class="item-name">${escapeHtml(item.name)}${gramsNote}<span class="item-cal num">${item.calories} cal${proteinSuffix(item.protein)}</span>${plannedLine}</span></span>
+    <span class="item-row-actions">
+      <button class="adj-btn" data-log="${logKey}" data-idx="${idx}" title="Adjust how much you finished">%</button>
+      <button class="rm" data-log="${logKey}" data-idx="${idx}">✕</button>
+    </span>
+  </div>`;
+}
+function attachItemRowHandlers(wrapEl) {
+  wrapEl.querySelectorAll('.eat-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const day = ensureDayLog(currentLogDate());
+      const item = day[btn.dataset.log] && day[btn.dataset.log][Number(btn.dataset.idx)];
+      if (!item) return;
+      item.eaten = !item.eaten;
+      saveJSON(LS_LOGS, logs);
+      renderLogTab();
+    });
+  });
+  wrapEl.querySelectorAll('.adj-btn').forEach(btn => {
+    btn.addEventListener('click', () => openPortionModal(btn.dataset.log, Number(btn.dataset.idx)));
+  });
+  wrapEl.querySelectorAll('.rm').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const dateStr = currentLogDate();
+      const day = ensureDayLog(dateStr);
+      day[btn.dataset.log].splice(Number(btn.dataset.idx), 1);
+      saveJSON(LS_LOGS, logs);
+      renderLogTab(); refreshGauge();
+    });
+  });
+}
+
+let portionTarget = null; // { logKey, idx }
+function openPortionModal(logKey, idx) {
+  const dateStr = currentLogDate();
+  const day = ensureDayLog(dateStr);
+  const item = day[logKey] && day[logKey][idx];
+  if (!item) return;
+  portionTarget = { logKey, idx };
+  const planned = item.plannedCalories != null ? item.plannedCalories : item.calories;
+  const plannedProtein = item.plannedProtein != null ? item.plannedProtein : item.protein;
+  document.getElementById('portionModalTitle').textContent = item.name;
+  document.getElementById('portionModalPlanned').textContent =
+    `Planned: ${planned} cal${plannedProtein ? ', ' + plannedProtein + 'g protein' : ''}`;
+  document.getElementById('portionCustomPct').value = item.portionPct != null ? item.portionPct : '';
+  document.getElementById('portionModalOverlay').style.display = 'flex';
+}
+function closePortionModal() {
+  document.getElementById('portionModalOverlay').style.display = 'none';
+  portionTarget = null;
+}
+function applyPortion(pct) {
+  if (!portionTarget) return;
+  const dateStr = currentLogDate();
+  const day = ensureDayLog(dateStr);
+  const item = day[portionTarget.logKey] && day[portionTarget.logKey][portionTarget.idx];
+  if (!item) return;
+  // capture the original planned amount the first time this item is ever adjusted
+  if (item.plannedCalories == null) item.plannedCalories = item.calories;
+  if (item.plannedProtein == null && item.protein) item.plannedProtein = item.protein;
+  item.portionPct = pct;
+  item.calories = Math.round(item.plannedCalories * (pct / 100) * 10) / 10;
+  if (item.plannedProtein) item.protein = Math.round(item.plannedProtein * (pct / 100) * 10) / 10;
+  saveJSON(LS_LOGS, logs);
+  closePortionModal();
+  renderLogTab();
+  refreshGauge();
+}
+document.querySelectorAll('.portion-pct-btn').forEach(btn => {
+  btn.addEventListener('click', () => applyPortion(Number(btn.dataset.pct)));
+});
+document.getElementById('portionApplyBtn').addEventListener('click', () => {
+  const custom = Number(document.getElementById('portionCustomPct').value);
+  if (!custom || custom < 1 || custom > 100) { alert('Enter a percent between 1 and 100.'); return; }
+  applyPortion(custom);
+});
+document.getElementById('portionCancelBtn').addEventListener('click', closePortionModal);
+
+function movePreset(id, direction) {
+  // move within its own category's relative order, without disturbing other categories
+  const p = presets.find(x => x.id === id);
+  if (!p) return;
+  const sameCat = presets.filter(x => x.category === p.category);
+  const idx = sameCat.findIndex(x => x.id === id);
+  const swapWith = sameCat[idx + direction];
+  if (!swapWith) return; // already at an end
+  const globalIdxA = presets.indexOf(p);
+  const globalIdxB = presets.indexOf(swapWith);
+  [presets[globalIdxA], presets[globalIdxB]] = [presets[globalIdxB], presets[globalIdxA]];
+  saveJSON(LS_PRESETS, presets);
+  renderPresets();
+}
+function renderPresets() {
+  PRESET_CATEGORIES.forEach(cat => {
+    const list = document.getElementById('presetList-' + cat);
+    const items = presets.filter(p => p.category === cat);
+    if (items.length === 0) {
+      list.innerHTML = '<div class="empty-note">No presets yet — add your regulars below.</div>';
+    } else {
+      list.innerHTML = items.map((p, i) => {
+        const label = cat === 'fruit'
+          ? `${escapeHtml(p.name)} <span style="color:var(--text-muted)">— ${p.calPerGram} cal/g${p.proteinPerGram ? `, ${p.proteinPerGram}g protein/g` : ''}</span>`
+          : `${escapeHtml(p.name)} <span style="color:var(--text-muted)">— ${p.calories} cal${proteinSuffix(p.protein)}</span>`;
+        return `<div class="preset-row">
+          <span>${label}</span>
+          <span class="preset-actions">
+            <button class="reorder-btn" data-id="${p.id}" data-dir="-1" ${i===0?'disabled':''}>▲</button>
+            <button class="reorder-btn" data-id="${p.id}" data-dir="1" ${i===items.length-1?'disabled':''}>▼</button>
+            <button class="rm" data-id="${p.id}">✕</button>
+          </span>
+        </div>`;
+      }).join('');
+      list.querySelectorAll('.rm').forEach(btn => {
+        btn.addEventListener('click', () => {
+          presets = presets.filter(p => p.id !== btn.dataset.id);
+          saveJSON(LS_PRESETS, presets);
+          renderPresets();
+          renderLogTab();
+        });
+      });
+      list.querySelectorAll('.reorder-btn').forEach(btn => {
+        btn.addEventListener('click', () => movePreset(btn.dataset.id, Number(btn.dataset.dir)));
+      });
+    }
+  });
+  populatePresetSelects();
+}
+document.querySelectorAll('.preset-add-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const cat = btn.dataset.category;
+    const nameInput = document.getElementById('newPresetName-' + cat);
+    const name = nameInput.value.trim();
+
+    if (cat === 'fruit') {
+      const calPGInput = document.getElementById('newPresetCalPerG-fruit');
+      const protPGInput = document.getElementById('newPresetProtPerG-fruit');
+      const calPerGram = Number(calPGInput.value);
+      const proteinPerGram = protPGInput.value ? Number(protPGInput.value) : undefined;
+      if (!name || !calPerGram) { alert('Enter a name and cal/gram value.'); return; }
+      const entry = { id: 'p' + Date.now(), name, category: 'fruit', calPerGram };
+      if (proteinPerGram) entry.proteinPerGram = proteinPerGram;
+      presets.push(entry);
+      saveJSON(LS_PRESETS, presets);
+      nameInput.value = '';
+      calPGInput.value = '';
+      protPGInput.value = '';
+      renderPresets();
+      renderLogTab();
+      return;
+    }
+
+    const calInput = document.getElementById('newPresetCal-' + cat);
+    const protInput = document.getElementById('newPresetProt-' + cat);
+    const cal = Number(calInput.value);
+    const protein = protInput.value ? Number(protInput.value) : undefined;
+    if (!name || !cal) { alert('Enter a name and calorie value.'); return; }
+    const entry = { id: 'p' + Date.now(), name, calories: cal, category: cat };
+    if (protein) entry.protein = protein;
+    presets.push(entry);
+    saveJSON(LS_PRESETS, presets);
+    nameInput.value = '';
+    calInput.value = '';
+    protInput.value = '';
+    renderPresets();
+    renderLogTab();
+  });
+});
+function escapeHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ================= UI: Log tab =================
+const MEAL_LABELS = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner' };
+
+function populatePresetSelects() {
+  ['breakfast','lunch','dinner'].forEach(cat => {
+    const opts = '<option value="">— pick a preset —</option>' +
+      presets.filter(p => p.category === cat).map(p => `<option value="${p.id}">${escapeHtml(p.name)} (${p.calories} cal${proteinSuffix(p.protein)})</option>`).join('');
+    document.querySelectorAll('.meal-preset-select[data-meal="' + cat + '"]').forEach(sel => sel.innerHTML = opts);
+  });
+  const snackOpts = '<option value="">— pick a preset —</option>' +
+    presets.filter(p => p.category === 'snack').map(p => `<option value="${p.id}">${escapeHtml(p.name)} (${p.calories} cal${proteinSuffix(p.protein)})</option>`).join('');
+  document.getElementById('snackPresetSelect').innerHTML = snackOpts;
+  const fruitOpts = '<option value="">— pick a fruit —</option>' +
+    presets.filter(p => p.category === 'fruit').map(p => `<option value="${p.id}">${escapeHtml(p.name)} (${p.calPerGram} cal/g${p.proteinPerGram ? `, ${p.proteinPerGram}g protein/g` : ''})</option>`).join('');
+  document.getElementById('fruitPresetSelect').innerHTML = fruitOpts;
+}
+
+let selectedLogDate = null;
+
+function currentLogDate() {
+  return selectedLogDate || todayStr();
+}
+
+function mondayOfWeek(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const dow = d.getDay(); // 0=Sun..6=Sat
+  const diffToMonday = dow === 0 ? -6 : 1 - dow;
+  d.setDate(d.getDate() + diffToMonday);
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function renderWeekStrip() {
+  const startInput = document.getElementById('weekStartDate');
+  const weekStart = startInput.value || mondayOfWeek(todayStr());
+  startInput.value = weekStart;
+  const strip = document.getElementById('weekStrip');
+  const shortNames = { Sunday:'Sun', Monday:'Mon', Tuesday:'Tue', Wednesday:'Wed', Thursday:'Thu', Friday:'Fri', Saturday:'Sat' };
+  strip.innerHTML = '';
+  let cursor = weekStart; // Monday, the one real anchor
+  for (let i = 0; i < 7; i++) {
+    const dateStr = cursor; // each day here is simply "the day before it, plus one"
+    const label = shortNames[weekdayName(dateStr)]; // computed from the real date, never assumed by position
+    const btn = document.createElement('div');
+    btn.className = 'week-day-btn' + (dateStr === selectedLogDate ? ' active' : '') + (dateStr === todayStr() ? ' today' : '');
+    btn.innerHTML = `<div class="wd-label">${label}</div><div class="wd-date">${dateStr.slice(5)}</div>`;
+    btn.addEventListener('click', () => {
+      selectedLogDate = dateStr;
+      saveStateValue(LS_SELECTED_DATE, dateStr);
+      renderWeekStrip();
+      renderLogTab();
+      refreshGauge();
+    });
+    strip.appendChild(btn);
+    cursor = addDays(cursor, 1); // chained +1, same as the spreadsheet
+  }
+}
+
+function renderFinalizeStatus(dateStr, day) {
+  const el = document.getElementById('finalizeStatus');
+  const total = dayTotal(dateStr);
+  const btn = document.getElementById('submitFinalBtn');
+  if (day.finalized) {
+    el.innerHTML = `<b style="color:var(--positive)">&#10003; Finalized</b> - ${total} cal locked in for ${dateStr}`;
+    btn.textContent = 'Re-submit Final Calories';
+  } else {
+    el.innerHTML = `${dateStr}: <b>${total} cal</b> logged so far - not yet finalized`;
+    btn.textContent = 'Submit Final Calories';
+  }
+}
+
+document.getElementById('submitFinalBtn').addEventListener('click', () => {
+  const dateStr = currentLogDate();
+  const day = ensureDayLog(dateStr);
+  day.finalized = true;
+  saveJSON(LS_LOGS, logs);
+  runCatchUp();
+  renderFinalizeStatus(dateStr, day);
+  refreshGauge();
+  runProjection();
+});
+
+// ================= Day settings (activity + goal) =================
+function goalLabel(g) { return g === 0 ? '0' : (g > 0 ? '-' : '+') + Math.abs(g).toFixed(1); }
+function setSelectValue(sel, value, label) {
+  const v = String(value);
+  if (![...sel.options].some(o => o.value === v)) {
+    const o = document.createElement('option'); o.value = v; o.textContent = label; sel.appendChild(o);
+  }
+  sel.value = v;
+}
+function afterSettingsChange() {
+  renderLogTab(); refreshGauge(); runProjection(); renderProfileReadouts();
+}
+function renderDaySettings() {
+  if (!profile) return;
+  const dateStr = currentLogDate();
+  const st = settingFor(dateStr);
+  setSelectValue(document.getElementById('dayActivity'), st.activity, 'Activity x' + st.activity);
+  setSelectValue(document.getElementById('dayGoal'), st.goal, goalLabel(st.goal));
+  const custom = isDayCustom(dateStr);
+  const std = standardFor(dateStr);
+  let txt = custom
+    ? 'Set for ' + dateStr + ' only. Other days use ' + goalLabel(std.goal) + ' lbs/week.'
+    : 'Using your standard' + (std.from ? ' (since ' + std.from + ')' : '') + '. Changing it here affects ' + dateStr + ' only.';
+  const plan = dayPlan(dateStr);
+  if (projMode.mode === 'offset' && plan && plan.open && solveOpenCut(projWindowStart(dateStr)) != null) {
+    txt += ' Offset is on in Projection, so this day\'s target is ' + Math.round(plan.target) + ' cal.';
+  }
+  document.getElementById('daySettingsStatus').textContent = txt;
+  document.getElementById('useStandardBtn').style.display = custom ? '' : 'none';
+}
+['dayActivity','dayGoal'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => {
+    if (!profile) { alert('Set up your profile first.'); return; }
+    daySettings.days[currentLogDate()] = {
+      activity: Number(document.getElementById('dayActivity').value),
+      goal: Number(document.getElementById('dayGoal').value)
+    };
+    saveJSON(LS_DAY_SETTINGS, daySettings);
+    afterSettingsChange();
+  });
+});
+document.getElementById('applyFutureBtn').addEventListener('click', () => {
+  if (!profile) { alert('Set up your profile first.'); return; }
+  const dateStr = currentLogDate();
+  const activity = Number(document.getElementById('dayActivity').value);
+  const goal = Number(document.getElementById('dayGoal').value);
+  if (!confirm('Use this activity level and ' + goalLabel(goal) + ' lbs/week for ' + dateStr + ' and every day after it?')) return;
+  daySettings.standards = daySettings.standards.filter(st => st.from < dateStr);
+  daySettings.standards.push({ from: dateStr, activity, goal });
+  Object.keys(daySettings.days).forEach(d => { if (d >= dateStr) delete daySettings.days[d]; });
+  saveJSON(LS_DAY_SETTINGS, daySettings);
+  afterSettingsChange();
+});
+document.getElementById('useStandardBtn').addEventListener('click', () => {
+  delete daySettings.days[currentLogDate()];
+  saveJSON(LS_DAY_SETTINGS, daySettings);
+  afterSettingsChange();
+});
+
+// ================= Projection mode (follow / offset) =================
+function renderProjModeControls(rows) {
+  document.getElementById('projModeSelect').value = projMode.mode;
+  setSelectValue(document.getElementById('projGoalSelect'), projMode.goal, goalLabel(projMode.goal));
+  const offset = projMode.mode === 'offset';
+  document.getElementById('projGoalRow').style.display = offset ? '' : 'none';
+  const el = document.getElementById('projModeStatus');
+  if (!offset) { el.textContent = 'Each day uses the goal set for it in Today\'s Log.'; return; }
+  if (!rows) { el.textContent = ''; return; }
+  const openRows = rows.filter(r => r.open);
+  const need = Number(projMode.goal) * 3500;
+  const fixed = rows.filter(r => !r.open).reduce((sum, r) => sum + (r.tdee - r.logged), 0);
+  if (!openRows.length) {
+    el.innerHTML = 'No open days left this week - every day is finalized or set by hand.';
+    return;
+  }
+  const each = (need - fixed) / openRows.length;
+  el.innerHTML = 'Week needs <b>' + Math.round(need).toLocaleString() + '</b> cal under maintenance. ' +
+    'Locked days cover <b>' + Math.round(fixed).toLocaleString() + '</b>. ' +
+    '<b>' + openRows.length + '</b> open day' + (openRows.length > 1 ? 's' : '') + ' pick up <b>' +
+    Math.round(need - fixed).toLocaleString() + '</b> = <b>' + Math.round(each).toLocaleString() + '</b> cal cut per day.';
+}
+document.getElementById('projModeSelect').addEventListener('change', () => {
+  projMode.mode = document.getElementById('projModeSelect').value === 'offset' ? 'offset' : 'follow';
+  saveJSON(LS_PROJ_MODE, projMode);
+  renderProjModeControls(null);
+  afterSettingsChange();
+});
+document.getElementById('projGoalSelect').addEventListener('change', () => {
+  projMode.goal = Number(document.getElementById('projGoalSelect').value);
+  saveJSON(LS_PROJ_MODE, projMode);
+  afterSettingsChange();
+});
+
+function renderPlanStatus() {
+  const el = document.getElementById('planStatus');
+  if (!el) return;
+  el.textContent = dailyPlan ? ('Daily plan saved from ' + dailyPlan.fromDate + ' - fills in days after it.') : 'No daily plan saved.';
+}
+document.getElementById('savePlanBtn').addEventListener('click', () => {
+  const dateStr = currentLogDate();
+  const day = ensureDayLog(dateStr);
+  const meals = planMealsFrom(day);
+  const empty = MEAL_KEYS.every(k => meals[k].length === 0);
+  const msg = empty
+    ? 'This day is empty. Save it as the plan? Days after ' + dateStr + ' will stop auto-filling.'
+    : 'Save this day as your daily meal plan? Days after ' + dateStr + ' will auto-fill with it.';
+  if (!confirm(msg)) return;
+  // Future days that were auto-filled and never touched get rebuilt from the new plan.
+  const oldSig = dailyPlan ? JSON.stringify(dailyPlan.meals) : null;
+  Object.keys(logs).forEach(d => {
+    const L = logs[d];
+    if (d > dateStr && L && L.fromPlan && !L.finalized && oldSig && JSON.stringify(planMealsFrom(L)) === oldSig
+        && !MEAL_KEYS.some(k => (L[k]||[]).some(it => it.eaten || it.portionPct != null))) {
+      delete logs[d];
+    }
+  });
+  dailyPlan = empty ? null : { fromDate: dateStr, meals };
+  if (dailyPlan) saveJSON(LS_DAILY_PLAN, dailyPlan);
+  else { try { localStorage.removeItem(LS_DAILY_PLAN); } catch(e) {} idbDelete(LS_DAILY_PLAN).catch(() => {}); }
+  saveJSON(LS_LOGS, logs);
+  renderLogTab(); renderWeekStrip(); refreshGauge();
+});
+document.getElementById('clearDayBtn').addEventListener('click', () => {
+  const dateStr = currentLogDate();
+  if (!confirm('Clear every item logged on ' + dateStr + '?')) return;
+  const day = ensureDayLog(dateStr);
+  MEAL_KEYS.forEach(k => { day[k] = []; });
+  day.fromPlan = false;
+  saveJSON(LS_LOGS, logs);
+  renderLogTab(); renderWeekStrip(); refreshGauge();
+});
+
+function renderLogTab() {
+  const dateStr = currentLogDate();
+  const day = ensureDayLog(dateStr);
+  renderPlanStatus();
+  renderDaySettings();
+  renderFinalizeStatus(dateStr, day);
+  const wrap = document.getElementById('mealBlocks');
+  wrap.innerHTML = '';
+
+  ['breakfast','lunch','dinner'].forEach(mealKey => {
+    const items = day[mealKey] || [];
+    const total = items.reduce((s,i) => s + (Number(i.calories)||0), 0);
+    const totalProtein = items.reduce((s,i) => s + (Number(i.protein)||0), 0);
+    const block = document.createElement('div');
+    block.className = 'meal-block';
+    block.innerHTML = `
+      <div class="meal-head"><span class="name">${MEAL_LABELS[mealKey]}</span><span class="total num">${total} cal${proteinSuffix(totalProtein)}</span></div>
+      <div class="items"></div>
+      <div class="add-row">
+        <select class="meal-preset-select" data-meal="${mealKey}"></select>
+        <button class="btn secondary add-preset-btn">Add</button>
+      </div>
+      <div class="add-row">
+        <input type="text" class="manual-name" placeholder="${MEAL_LABELS[mealKey]} item">
+        <input type="number" class="manual-cal" placeholder="Cal">
+        <input type="number" class="manual-protein" placeholder="Protein g (opt)">
+        <button class="btn secondary add-manual-btn">Add</button>
+      </div>
+      <label class="preset-check"><input type="checkbox" class="save-as-preset-check"> Save as preset</label>
+    `;
+    const itemsWrap = block.querySelector('.items');
+    if (items.length === 0) {
+      itemsWrap.innerHTML = '<div class="empty-note">Nothing logged yet.</div>';
+    } else {
+      itemsWrap.innerHTML = items.map((it, idx) => renderItemRow(mealKey, idx, it)).join('');
+    }
+    block.querySelector('.add-preset-btn').addEventListener('click', () => {
+      const sel = block.querySelector('.meal-preset-select');
+      const preset = presets.find(p => p.id === sel.value);
+      if (!preset) return;
+      const entry = { name: preset.name, calories: preset.calories };
+      if (preset.protein) entry.protein = preset.protein;
+      day[mealKey].push(entry);
+      saveJSON(LS_LOGS, logs);
+      renderLogTab(); refreshGauge();
+    });
+    block.querySelector('.add-manual-btn').addEventListener('click', () => {
+      const nameInput = block.querySelector('.manual-name');
+      const calInput = block.querySelector('.manual-cal');
+      const protInput = block.querySelector('.manual-protein');
+      const saveCheck = block.querySelector('.save-as-preset-check');
+      const name = nameInput.value.trim();
+      const cal = Number(calInput.value);
+      const protein = protInput.value ? Number(protInput.value) : undefined;
+      if (!name || !cal) return;
+      const entry = { name, calories: cal };
+      if (protein) entry.protein = protein;
+      day[mealKey].push(entry);
+      if (saveCheck && saveCheck.checked) {
+        const presetEntry = { id: 'p' + Date.now(), name, calories: cal, category: mealKey };
+        if (protein) presetEntry.protein = protein;
+        presets.push(presetEntry);
+        saveJSON(LS_PRESETS, presets);
+      }
+      saveJSON(LS_LOGS, logs);
+      renderLogTab(); renderPresets(); refreshGauge();
+    });
+    attachItemRowHandlers(itemsWrap);
+    wrap.appendChild(block);
+  });
+
+  // snacks
+  const snacks = day.snacks || [];
+  const snackTotal = snacks.reduce((s,i) => s + (Number(i.calories)||0), 0);
+  const snackTotalProtein = snacks.reduce((s,i) => s + (Number(i.protein)||0), 0);
+  document.getElementById('snacksTotal').textContent = snackTotal + ' cal' + proteinSuffix(snackTotalProtein);
+  const snackItemsWrap = document.getElementById('snackItems');
+  if (snacks.length === 0) {
+    snackItemsWrap.innerHTML = '<div class="empty-note">No snacks logged yet.</div>';
+  } else {
+    snackItemsWrap.innerHTML = snacks.map((it, idx) => renderItemRow('snacks', idx, it)).join('');
+    attachItemRowHandlers(snackItemsWrap);
+  }
+  // fruit
+  const fruit = day.fruit || [];
+  const fruitTotal = fruit.reduce((s,i) => s + (Number(i.calories)||0), 0);
+  const fruitTotalProtein = fruit.reduce((s,i) => s + (Number(i.protein)||0), 0);
+  document.getElementById('fruitTotal').textContent = fruitTotal + ' cal' + proteinSuffix(fruitTotalProtein);
+  const fruitItemsWrap = document.getElementById('fruitItems');
+  if (fruit.length === 0) {
+    fruitItemsWrap.innerHTML = '<div class="empty-note">No fruit logged yet.</div>';
+  } else {
+    fruitItemsWrap.innerHTML = fruit.map((it, idx) => renderItemRow('fruit', idx, it)).join('');
+    attachItemRowHandlers(fruitItemsWrap);
+  }
+  populatePresetSelects();
+}
+function persistWeekStart() {
+  const v = document.getElementById('weekStartDate').value;
+  if (v) saveStateValue(LS_WEEK_START, v);
+}
+document.getElementById('weekStartDate').addEventListener('change', () => { persistWeekStart(); renderWeekStrip(); runProjection(); });
+document.getElementById('saveWeekStartBtn').addEventListener('click', () => {
+  persistWeekStart();
+  if (selectedLogDate) saveStateValue(LS_SELECTED_DATE, selectedLogDate);
+  const b = document.getElementById('saveWeekStartBtn');
+  b.textContent = 'Saved ✓';
+  setTimeout(() => { b.textContent = 'Save'; }, 1500);
+  renderWeekStrip(); runProjection();
+});
+document.getElementById('addSnackPresetBtn').addEventListener('click', () => {
+  const dateStr = currentLogDate();
+  const day = ensureDayLog(dateStr);
+  const sel = document.getElementById('snackPresetSelect');
+  const preset = presets.find(p => p.id === sel.value);
+  if (!preset) return;
+  const qty = Number(document.getElementById('snackPresetQty').value) || 1;
+  const totalCal = preset.calories * qty;
+  const entry = { name: qty > 1 ? preset.name + ' ×' + qty : preset.name, calories: totalCal };
+  if (preset.protein) entry.protein = preset.protein * qty;
+  day.snacks.push(entry);
+  saveJSON(LS_LOGS, logs);
+  document.getElementById('snackPresetQty').value = '1';
+  renderLogTab(); refreshGauge();
+});
+document.getElementById('addSnackManualBtn').addEventListener('click', () => {
+  const dateStr = currentLogDate();
+  const day = ensureDayLog(dateStr);
+  const name = document.getElementById('snackManualName').value.trim();
+  const calEach = Number(document.getElementById('snackManualCal').value);
+  const qty = Number(document.getElementById('snackManualQty').value) || 1;
+  const protEach = document.getElementById('snackManualProt').value ? Number(document.getElementById('snackManualProt').value) : undefined;
+  if (!name || !calEach) return;
+  const totalCal = calEach * qty;
+  const entry = { name: qty > 1 ? name + ' ×' + qty : name, calories: totalCal };
+  if (protEach) entry.protein = protEach * qty;
+  day.snacks.push(entry);
+  const saveCheck = document.getElementById('snackSaveAsPreset');
+  if (saveCheck && saveCheck.checked) {
+    const presetEntry = { id: 'p' + Date.now(), name, calories: calEach, category: 'snack' };
+    if (protEach) presetEntry.protein = protEach;
+    presets.push(presetEntry);
+    saveJSON(LS_PRESETS, presets);
+    saveCheck.checked = false;
+  }
+  saveJSON(LS_LOGS, logs);
+  document.getElementById('snackManualName').value = '';
+  document.getElementById('snackManualCal').value = '';
+  document.getElementById('snackManualQty').value = '1';
+  document.getElementById('snackManualProt').value = '';
+  renderLogTab(); renderPresets(); refreshGauge();
+});
+
+document.getElementById('addFruitPresetBtn').addEventListener('click', () => {
+  const dateStr = currentLogDate();
+  const day = ensureDayLog(dateStr);
+  const sel = document.getElementById('fruitPresetSelect');
+  const preset = presets.find(p => p.id === sel.value);
+  const grams = Number(document.getElementById('fruitPresetGrams').value);
+  if (!preset) { alert('Pick a fruit preset.'); return; }
+  if (!grams) { alert('Enter how many grams.'); return; }
+  const entry = {
+    name: preset.name,
+    grams,
+    calories: Math.round(preset.calPerGram * grams * 10) / 10
+  };
+  if (preset.proteinPerGram) entry.protein = Math.round(preset.proteinPerGram * grams * 10) / 10;
+  day.fruit.push(entry);
+  saveJSON(LS_LOGS, logs);
+  document.getElementById('fruitPresetGrams').value = '';
+  renderLogTab(); refreshGauge();
+});
+
+document.getElementById('addFruitManualBtn').addEventListener('click', () => {
+  const dateStr = currentLogDate();
+  const day = ensureDayLog(dateStr);
+  const name = document.getElementById('fruitManualName').value.trim();
+  const calPerGram = Number(document.getElementById('fruitManualCalPerG').value);
+  const protPerGram = document.getElementById('fruitManualProtPerG').value ? Number(document.getElementById('fruitManualProtPerG').value) : undefined;
+  const grams = Number(document.getElementById('fruitManualGrams').value);
+  if (!name || !calPerGram) { alert('Enter a name and cal/gram value.'); return; }
+  if (!grams) { alert('Enter how many grams.'); return; }
+  const entry = { name, grams, calories: Math.round(calPerGram * grams * 10) / 10 };
+  if (protPerGram) entry.protein = Math.round(protPerGram * grams * 10) / 10;
+  day.fruit.push(entry);
+  const saveCheck = document.getElementById('fruitSaveAsPreset');
+  if (saveCheck && saveCheck.checked) {
+    const presetEntry = { id: 'p' + Date.now(), name, category: 'fruit', calPerGram };
+    if (protPerGram) presetEntry.proteinPerGram = protPerGram;
+    presets.push(presetEntry);
+    saveJSON(LS_PRESETS, presets);
+    saveCheck.checked = false;
+  }
+  saveJSON(LS_LOGS, logs);
+  document.getElementById('fruitManualName').value = '';
+  document.getElementById('fruitManualCalPerG').value = '';
+  document.getElementById('fruitManualProtPerG').value = '';
+  document.getElementById('fruitManualGrams').value = '';
+  renderLogTab(); renderPresets(); refreshGauge();
+});
+
+// ================= UI: Progress tab =================
+document.getElementById('sharedWeighBtn').addEventListener('click', () => {
+  const enteredDate = document.getElementById('sharedWeighDate').value || todayStr();
+  const weight = Number(document.getElementById('sharedWeighValue').value);
+  const systolic = Number(document.getElementById('bpSystolic').value);
+  const diastolic = Number(document.getElementById('bpDiastolic').value);
+  const hasBp = !!(systolic || diastolic);
+  if (hasBp && !(systolic && diastolic)) { alert('Enter both blood pressure numbers.'); return; }
+  const doseRaw = document.getElementById('doseMg').value.trim();
+  const cur = latestDose();
+  // Only a CHANGED number counts as a new dose; the pre-filled one is just a reminder.
+  const doseChanged = doseRaw !== '' && Number(doseRaw) >= 0 && doseRaw !== (cur ? fmtDose(cur.mg) : '') && !(cur && Number(doseRaw) === cur.mg);
+  if (!weight && !hasBp && !doseChanged) { alert('Enter a weight, blood pressure, or a new dose.'); return; }
+  // Stored on the day you actually weighed in. (Projection math handles the
+  // "fasted morning = previous day's result" shift on its own.)
+  const actualDate = enteredDate;
+  if (weight) {
+    weighins = weighins.filter(w => !(w.date === actualDate));
+    weighins.push({ date: actualDate, weight, source: 'logged' });
+    weighins.sort((a,b) => a.date.localeCompare(b.date));
+    saveJSON(LS_WEIGHINS, weighins);
+    document.getElementById('sharedWeighValue').value = '';
+  }
+  if (hasBp) {
+    bpLog = bpLog.filter(r => r.date !== actualDate);
+    bpLog.push({ date: actualDate, systolic, diastolic });
+    bpLog.sort((a,b) => a.date.localeCompare(b.date));
+    saveJSON(LS_BP, bpLog);
+    document.getElementById('bpSystolic').value = '';
+    document.getElementById('bpDiastolic').value = '';
+  }
+  if (doseChanged) {
+    doseLog = doseLog.filter(d => d.date !== actualDate);
+    doseLog.push({ date: actualDate, mg: Number(doseRaw) });
+    doseLog.sort((a,b) => a.date.localeCompare(b.date));
+    saveJSON(LS_DOSE, doseLog);
+  }
+  renderDoseField();
+  runCatchUp();
+  renderProgress();
+  renderLogTab();
+  refreshGauge();
+  runProjection();
+});
+
+document.getElementById('recalcProjectionBtn').addEventListener('click', () => {
+  if (!profile) { alert('Set up your profile first.'); return; }
+  runProjection();
+});
+
+// One row per date that has a weigh-in and/or a BP reading.
+function buildProgressRows() {
+  const bpByDate = {};
+  bpLog.forEach(r => { bpByDate[r.date] = r; });
+  const wByDate = {};
+  weighins.forEach(w => { wByDate[w.date] = w; });
+  const dates = [...new Set([...Object.keys(wByDate), ...Object.keys(bpByDate), ...doseLog.map(d => d.date)])].sort();
+  // Week = your "Select Week Start Date" weekday. A weigh-in on day D reflects day D-1,
+  // so it counts toward the week containing D-1; the week's baseline is the last
+  // weigh-in on or before that week's start day (same anchor Projection uses).
+  const wsEl = document.getElementById('weekStartDate');
+  const startDow = new Date(((wsEl && wsEl.value) || mondayOfWeek(todayStr())) + 'T00:00:00').getDay();
+  const wDates = Object.keys(wByDate).sort();
+  function weekStartFor(d) {
+    let c = addDays(d, -1);
+    while (new Date(c + 'T00:00:00').getDay() !== startDow) c = addDays(c, -1);
+    return c;
+  }
+  let first = null, prev = null;
+  return dates.map(date => {
+    const w = wByDate[date];
+    const bp = bpByDate[date];
+    const row = { date, weight: w ? w.weight : null, deltaFromPrev: null, cumulativeFromStart: null, weekChange: null,
+                  bp: bp ? (bp.systolic + '/' + bp.diastolic) : null,
+                  dose: doseAsOf(date) };
+    if (w) {
+      if (first === null) first = w.weight;
+      row.deltaFromPrev = prev !== null ? (w.weight - prev) : null;
+      row.cumulativeFromStart = w.weight - first;
+      const ws = weekStartFor(date);
+      let baseDate = null;
+      wDates.forEach(d => { if (d <= ws && d < date) baseDate = d; });
+      if (!baseDate && wDates[0] < date) baseDate = wDates[0];
+      row.weekChange = baseDate ? (w.weight - wByDate[baseDate].weight) : null;
+      prev = w.weight;
+    }
+    return row;
+  });
+}
+
+// ================= BMI milestone =================
+// BMI = 703 x lbs / in^2  ->  weight at a BMI = BMI x in^2 / 703
+const BMI_CLASSES = [
+  { name: 'Healthy weight', min: 18.5 },
+  { name: 'Overweight', min: 25.0 },
+  { name: 'Obesity Class 1', min: 30.0 },
+  { name: 'Obesity Class 2', min: 35.0 },
+  { name: 'Obesity Class 3 (Severe)', min: 40.0 }
+];
+document.getElementById('breakthroughOk').addEventListener('click', () => {
+  document.getElementById('breakthroughOverlay').style.display = 'none';
+});
+function renderBmiCard() {
+  const wrap = document.getElementById('bmiWrap');
+  if (!wrap) return;
+  const inches = profile ? (Number(profile.heightFt)||0) * 12 + (Number(profile.heightIn)||0) : 0;
+  const logged = [...weighins].filter(w => w.source === 'logged').sort((a,b) => a.date.localeCompare(b.date));
+  const current = logged.length ? logged[logged.length-1].weight : (profile ? Number(profile.weight) : 0);
+  if (!inches || !current) { wrap.innerHTML = '<div class="empty-note">Fill in your height and weight in Profile.</div>'; return; }
+  const bmiOf = w => 703 * w / (inches * inches);
+  const weightAt = b => b * inches * inches / 703;
+  const bmi = bmiOf(current);
+  let idx = -1;
+  BMI_CLASSES.forEach((c,i) => { if (bmi >= c.min) idx = i; });
+  const cls = idx >= 0 ? BMI_CLASSES[idx].name : 'Underweight';
+  // Breakthrough heads-up: dropped into a lower class than last time
+  const prevRaw = localStorage.getItem(LS_BMI_CLASS);
+  if (prevRaw !== null && idx >= 0 && idx < Number(prevRaw)) {
+    const left = BMI_CLASSES[Number(prevRaw)].name;
+    document.getElementById('breakthroughText').innerHTML =
+      `You left <b>${left}</b>.<br>You're now in <b>${cls}</b>.` +
+      (idx >= 1 ? `<br><br>Next goal: <b>${BMI_CLASSES[idx-1].name}</b>` : '');
+    document.getElementById('breakthroughOverlay').style.display = 'flex';
+  }
+  if (String(idx) !== prevRaw) saveStateValue(LS_BMI_CLASS, idx);
+  let html = `<div style="text-align:center"><div class="num" style="font-size:1.8em;font-weight:700">${bmi.toFixed(1)}</div>
+    <div style="font-size:0.9em;color:var(--text-muted)">${cls} &middot; ${current} lbs</div></div>`;
+  if (idx >= 1) {
+    const next = BMI_CLASSES[idx-1];
+    const targetBmi = BMI_CLASSES[idx].min - 0.1;           // e.g. 39.9 to touch down in Class 2
+    const targetW = weightAt(targetBmi);
+    const toGo = Math.max(0, current - targetW);
+    // bar starts at your first weigh-in (first milestone) or the top of your current class after that
+    const startW = idx === BMI_CLASSES.length - 1
+      ? Math.max(logged.length ? logged[0].weight : current, current)
+      : weightAt(BMI_CLASSES[idx+1].min - 0.1);
+    const span = startW - targetW;
+    const pct = span > 0 ? Math.min(100, Math.max(0, (startW - current) / span * 100)) : 0;
+    html += `<div style="margin-top:14px;text-align:center;padding:10px;border:2px solid var(--accent);border-radius:10px;background:var(--accent-dim)">
+        <div style="font-size:0.75em;color:var(--text-muted);letter-spacing:0.03em">NEXT GOAL</div>
+        <div style="font-size:1.15em;font-weight:700;margin-top:2px">${next.name}</div>
+        <div style="font-size:0.85em;margin-top:2px">at <b class="num">${targetW.toFixed(1)} lbs</b> (BMI ${targetBmi.toFixed(1)})</div></div>
+      <div class="num" style="font-size:1.3em;font-weight:700;color:var(--accent);margin-top:4px">${toGo.toFixed(1)} lbs to go</div>
+      <div style="height:12px;background:var(--surface-2);border-radius:6px;overflow:hidden;margin-top:8px">
+        <div style="height:100%;width:${pct.toFixed(1)}%;background:var(--positive)"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:0.75em;color:var(--text-muted);margin-top:3px">
+        <span class="num">${startW.toFixed(1)}</span><span class="num">${pct.toFixed(0)}%</span><span class="num">${targetW.toFixed(1)}</span></div>`;
+  } else if (idx === 0) {
+    html += `<div style="margin-top:10px;text-align:center;color:var(--positive);font-weight:600">Healthy range reached</div>`;
+  }
+  html += `<div style="margin-top:12px;font-size:0.75em;color:var(--text-muted);line-height:1.6">
+    Healthy 18.5–24.9 &middot; Overweight 25.0–29.9 &middot; Class 1 30.0–34.9 &middot; Class 2 35.0–39.9 &middot; Class 3 40.0+</div>`;
+  wrap.innerHTML = html;
+}
+
+function renderProgress() {
+  renderBmiCard();
+  const wrap = document.getElementById('weighTableWrap');
+  const rows = buildProgressRows();
+  if (rows.length === 0) {
+    wrap.innerHTML = '<div class="empty-note">No entries yet.</div>';
+    return;
+  }
+  const sorted = [...rows].reverse();
+
+  function fmtDelta(n) {
+    if (n === null) return '&mdash;';
+    const sign = n <= 0 ? '' : '+';
+    const color = n < 0 ? 'var(--positive)' : (n > 0 ? 'var(--negative)' : 'var(--text-muted)');
+    return '<span style="color:' + color + '">' + sign + n.toFixed(1) + '</span>';
+  }
+
+  wrap.innerHTML = '<table class="weigh-table"><tr><th>Date</th><th>Weight</th><th>Since last</th><th>Total change</th><th>Blood pressure</th><th>Dose mg/wk</th><th></th></tr>' +
+    sorted.map(r => `<tr><td>${r.date}</td><td class="num">${r.weight !== null ? r.weight : '&mdash;'}</td><td class="num">${fmtDelta(r.deltaFromPrev)}</td><td class="num">${fmtDelta(r.cumulativeFromStart)}</td><td class="num">${r.bp || '&mdash;'}</td><td class="num">${r.dose !== null ? fmtDose(r.dose) : '&mdash;'}</td><td><button class="rm" data-date="${r.date}" title="Delete this entry">✕</button></td></tr>`).join('') +
+    '</table>';
+
+  wrap.querySelectorAll('.rm').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const date = btn.dataset.date;
+      const sure = confirm("Delete everything logged for " + date + " (weight, blood pressure, and any dose change)? This recalculates Projection and today's target too.");
+      if (!sure) return;
+      weighins = weighins.filter(w => w.date !== date);
+      bpLog = bpLog.filter(r => r.date !== date);
+      doseLog = doseLog.filter(d => d.date !== date);
+      saveJSON(LS_DOSE, doseLog);
+      renderDoseField();
+      saveJSON(LS_WEIGHINS, weighins);
+      saveJSON(LS_BP, bpLog);
+      renderProgress();
+      refreshGauge();
+      runProjection();
+    });
+  });
+}
+
+// ================= PDF export (via native print) =================
+function printDateRange(title, fromId, toId, rows, columns) {
+  const from = document.getElementById(fromId).value;
+  const to = document.getElementById(toId).value;
+  if (!from || !to) { alert('Pick a From and To date first.'); return; }
+  if (from > to) { alert('"From" date is after "To" date.'); return; }
+  const filtered = rows.filter(r => r.date >= from && r.date <= to).sort((a,b) => a.date.localeCompare(b.date));
+  if (filtered.length === 0) { alert('No entries in that date range.'); return; }
+
+  const area = document.getElementById('printExportArea');
+  let html = `<h1>${title}</h1><div class="print-range">${from} to ${to} &middot; ${filtered.length} entries</div>`;
+  html += '<table><tr>' + columns.map(c => `<th>${c.label}</th>`).join('') + '</tr>';
+  filtered.forEach(r => {
+    html += '<tr>' + columns.map(c => `<td>${escapeHtml(String(c.value(r)))}</td>`).join('') + '</tr>';
+  });
+  html += '</table>';
+  area.innerHTML = html;
+  window.print();
+}
+document.getElementById('weightPdfBtn').addEventListener('click', () => {
+  const fmt = n => n === null ? '' : (n > 0 ? '+' : '') + n.toFixed(1);
+  printDateRange('Progress', 'weightPdfFrom', 'weightPdfTo', buildProgressRows(), [
+    { label: 'Date', value: r => r.date },
+    { label: 'Weight', value: r => r.weight !== null ? r.weight : '' },
+    { label: 'Wk Lost/Gain', value: r => fmt(r.weekChange) },
+    { label: 'Overall Lost/Gain', value: r => fmt(r.cumulativeFromStart) },
+    { label: 'BP', value: r => r.bp || '' },
+    { label: 'Dose (mg/wk)', value: r => fmtDose(r.dose) }
+  ]);
+});
+
+// ================= Gauge header =================
+function refreshGauge() {
+  const dateStr = currentLogDate(); // reflects whichever day is selected in Today's Log, not always real-today
+  document.getElementById('gaugeDate').textContent = dateStr;
+  document.getElementById('gaugeTitle').textContent = (dateStr === todayStr()) ? "TODAY'S BALANCE" : 'BALANCE FOR ' + weekdayName(dateStr).toUpperCase();
+  if (!profile) {
+    document.getElementById('gaugeNumber').textContent = '—';
+    document.getElementById('gaugeSub').textContent = 'Set up your profile to get started.';
+    return;
+  }
+  const target = targetForDate(dateStr);
+  const logged = dayTotal(dateStr);
+  const proteinLogged = dayProteinTotal(dateStr);
+  const remaining = Math.round(target - logged);
+  const numEl = document.getElementById('gaugeNumber');
+  numEl.textContent = (remaining >= 0 ? remaining : Math.abs(remaining));
+  numEl.className = 'gauge-number num ' + (remaining >= 0 ? 'positive' : 'negative');
+  document.getElementById('gaugeSub').innerHTML =
+    `Target <b>${Math.round(target)}</b> cal &middot; Logged <b>${Math.round(logged)}</b> cal` +
+    (proteinLogged > 0 ? ` &middot; <b>${Math.round(proteinLogged)}g</b> protein` : '') +
+    (remaining < 0 ? ' &middot; <b style="color:var(--negative)">over</b>' : '');
+  const pct = target > 0 ? Math.min(100, (logged / target) * 100) : 100;
+  const bar = document.getElementById('gaugeBar');
+  bar.style.width = pct + '%';
+  bar.className = 'gauge-bar-fill' + (logged > target ? ' over' : '');
+}
+
+// ================= Init =================
+function refreshAll() {
+  runCatchUp();
+  migratePresets();
+  renderWeekStrip();
+  renderPresets();
+  renderLogTab();
+  renderProgress();
+  renderDoseField();
+  refreshGauge();
+  renderProfileReadouts();
+}
+
+(async function init() {
+  // Resume whichever day was last selected in Today's Log, not always today -
+  // it should stay put across closing/reopening the app until you pick a new one.
+  // (selected day + week start are read AFTER the durable restore below)
+  document.getElementById('sharedWeighDate').value = todayStr();
+  document.getElementById('weightPdfFrom').value = addDays(todayStr(), -30);
+  document.getElementById('weightPdfTo').value = todayStr();
+
+  // Recover the durable IndexedDB copy first when this Home Screen web app
+  // does not have its localStorage copy. This is what protects progress across
+  // Safari/web-app launches.
+  await restoreDurableState();
+  if (localStorage.getItem(LS_DATES_V2) !== '1') {
+    weighins = shiftToActualDays(weighins);
+    bpLog = shiftToActualDays(bpLog);
+    saveJSON(LS_WEIGHINS, weighins);
+    saveJSON(LS_BP, bpLog);
+    saveStateValue(LS_DATES_V2, '1');
+  }
+
+  // Resume the saved day and saved week start exactly as you left them.
+  selectedLogDate = localStorage.getItem(LS_SELECTED_DATE) || todayStr();
+  document.getElementById('weekStartDate').value =
+    localStorage.getItem(LS_WEEK_START) || mondayOfWeek(selectedLogDate);
+
+  if (profile) fillProfileForm();
+  refreshAll();
+  runProjection();
+})();
+</script>
+</body>
+</html>
